@@ -6,6 +6,7 @@ from PIL import Image
 from scipy.optimize import curve_fit
 from scipy.signal import convolve
 from scipy.integrate import simps
+from scipy.interpolate import interp1d
 
 
 import matplotlib.animation as animation
