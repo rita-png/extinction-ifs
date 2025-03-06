@@ -266,3 +266,32 @@ def cosine_kernel(size):
     x = np.linspace(-np.pi, np.pi, size)
     kernel = (1 + np.cos(x))/2  
     return kernel / np.sum(kernel)
+
+## smoothing the spectra ##
+
+def smooth_spectra(y,kernel_size):
+
+    kernel = cosine_kernel(kernel_size)
+    y_smooth = convolve(y, kernel, mode='same')
+    return y_smooth
+
+def continuum(x,y,threshold=100):#threshold = 100  was based on experimentation...
+
+    ## selecting points for continuum
+    #continuum_mask = (y_chopped <= y_smooth * (1+threshold))  # points of smooothed spectra
+    continuum_mask = y<threshold  # points of smooothed spectra
+    x_continuum = (x)[continuum_mask]
+    y_continuum = (y)[continuum_mask]
+
+
+    if len(y_continuum)==0:
+        plt.plot(x,y)
+        plt.show()
+        print("Couldn't find continuum")
+        return
+        
+    ## fitting the selected points
+    p_coeffs = np.polyfit(x_continuum, y_continuum, 4)
+    fit = np.poly1d(p_coeffs)
+    
+    return fit, x_continuum, y_continuum
