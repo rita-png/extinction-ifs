@@ -291,7 +291,7 @@ def continuum(x,y,threshold=100):#threshold = 100  was based on experimentation.
         return
         
     ## fitting the selected points
-    p_coeffs = np.polyfit(x_continuum, y_continuum, 4)
+    p_coeffs = np.polyfit(x_continuum, y_continuum, 4) #### input incertezas
     fit = np.poly1d(p_coeffs)
     
     return fit, x_continuum, y_continuum
