@@ -188,6 +188,24 @@ def mad(data):
     return np.nanmedian(np.abs(data - median))
 
 
+## staking spectra ##
+
+def avg_spectra_of_region(data,z=0):
+    wavelengths=len(data)
+    region_area=len(data[0])*len(data[0][0])
+    """spec_avg=np.zeros(wavelengths)
+    for i in range(0,wavelengths):
+        spec_avg[i]=np.sum(data[i,:,:])/(region_area)"""
+    # sum along the first two axes (rows and columns of the region) and then average
+    spec_avg = np.sum(data, axis=(1, 2)) / region_area
+    
+    return spec_avg
+
+def median_spectra_of_region(data, z=0):
+    spec_median = np.median(data, axis=(1, 2))
+    return spec_median
+
+
 ## image signal to noise ##
 
 def signaltonoise(image,noise): #this uses the error from MUSE as noise estimation
@@ -275,13 +293,13 @@ def smooth_spectra(y,kernel_size):
     y_smooth = convolve(y, kernel, mode='same')
     return y_smooth
 
-def continuum(x,y,threshold=100):#threshold = 100  was based on experimentation...
+def continuum(x,y):
 
     ## selecting points for continuum
-    #continuum_mask = (y_chopped <= y_smooth * (1+threshold))  # points of smooothed spectra
-    continuum_mask = y<threshold  # points of smooothed spectra
-    x_continuum = (x)[continuum_mask]
-    y_continuum = (y)[continuum_mask]
+    #continuum_mask = y<threshold  # points of smooothed spectra
+    #x_continuum = (x)[continuum_mask]
+    #y_continuum = (y)[continuum_mask]
+    x_continuum,y_continuum=filterout_peaks(x,y)
 
 
     if len(y_continuum)==0:
@@ -295,3 +313,122 @@ def continuum(x,y,threshold=100):#threshold = 100  was based on experimentation.
     fit = np.poly1d(p_coeffs)
     
     return fit, x_continuum, y_continuum
+
+## filtering out peaks ##
+
+def filterout_peaks(x,y):
+    Q1 = np.percentile(y, 30)
+    Q3 = np.percentile(y, 70)
+    IQR = Q3 - Q1
+    threshold = Q3 + 1.5 * IQR
+
+    mask= y<threshold
+    filtered_x=(x)[mask]
+    filtered_y=(y)[mask]
+    #filtered_y = y[y < threshold]  # Remove peaks
+    
+    return filtered_x, filtered_y
+
+
+## EW ##
+
+def EW_parametric(x,y,cont,bound1,bound2,plots=True):
+
+    # removing the continuum from the flux data
+    flux_reduced = cont(x)-y
+
+    initial_guess = initial_guess = [max(flux_reduced), np.mean(x), np.std(x)]
+    params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)
+    A_fit, mu_fit, sigma_fit = params
+
+
+    x_fit = np.linspace(min(x), max(x), 100)
+    y_fit = gaussian(x_fit, params[0], params[1], params[2])
+
+    flux_reduced_gaussian = lambda x: gaussian(x,*params)
+    
+    if plots==True:
+        plt.scatter(x, flux_reduced, label="Continuum-Flux (interpolation)", color="red",s=3)
+        plt.plot(x_fit, y_fit, label="fit")
+        plt.fill_between(x_fit, y_fit, alpha=0.3, color='gray', label="Integral")
+        plt.xlabel("X-axis")
+        plt.ylabel("Y-axis")
+        plt.legend()
+        plt.title("Finding EW")
+        plt.xlim(6610,6632)
+        plt.show()
+    
+    xx=np.linspace(bound1,bound2, 50)  # Generate 50 new points
+    
+    delta=(bound2-bound1)/50
+    
+    val=0
+    for x in xx:
+        val+=delta*(flux_reduced_gaussian(x))/cont(x)
+    
+    return val
+    
+    
+
+
+
+
+## Maps ##
+#parametric#
+def EW_map(cube_region,wave,central_wavelength,kernel_size=3):
+        
+
+    x_len=len(cube_region[0][0])
+    y_len=len(cube_region[0])
+    
+    map=np.zeros((x_len, y_len))
+    
+    
+    x_min=central_wavelength-40
+    x_max=central_wavelength+40
+            
+    for i in range(0,x_len):
+        for j in range(0,y_len):
+            
+            spec=cube_region[:,j,i]
+            
+            # chop data
+            x_chopped,y_chopped=chop_data(wave,spec,x_min,x_max)
+            
+            
+            # smooth data
+            y_smooth=smooth_spectra(y_chopped,kernel_size)
+            
+            # fit to continuum
+            aux=continuum(x_chopped,y_smooth)
+            if(aux==None): # skipping the i,j pixel in case we cannot find the continuum
+                map[i,j]=np.nan
+                continue 
+            else:
+                continuum_fit=aux[0]
+                x_cont=aux[1]
+                y_cont=aux[2]
+            
+            y_continuum_fit = continuum_fit(x_chopped)
+            #plt.plot(x_chopped,y_continuum_fit,label="cont")
+    
+            # integrating the smoothed spectra in a smaller window            
+            interp_func = interp1d(x_chopped,y_smooth, kind='cubic')
+            xx = np.linspace(central_wavelength-4,central_wavelength+4, 50)  # Generate 50 new points
+            yy = interp_func(xx)
+            
+            #plt.plot(xx,yy)
+            #plt.show()
+            
+
+            # measuring EW
+            b1=central_wavelength-3#6619
+            b2=central_wavelength+3#6625
+            xxx,yyy=chop_data(xx,yy,b1,b2)
+            ew=EW_parametric(xxx,yyy,continuum_fit,b1,b2,plots=False)
+            
+            print("EW=",ew," at (i,j)=",i,",",j)
+            
+            map[i,j]=ew
+            
+    return map
