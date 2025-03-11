@@ -296,11 +296,7 @@ def smooth_spectra(y,kernel_size):
 def continuum(x,y):
 
     ## selecting points for continuum
-    #continuum_mask = y<threshold  # points of smooothed spectra
-    #x_continuum = (x)[continuum_mask]
-    #y_continuum = (y)[continuum_mask]
     x_continuum,y_continuum=filterout_peaks(x,y)
-
 
     if len(y_continuum)==0:
         plt.plot(x,y)
@@ -383,14 +379,13 @@ def EW_parametric(x,y,cont,plots=True):
 
 ## Maps ##
 #parametric#
-def EW_map(cube_region,wave,central_wavelength,kernel_size=3):
+def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3):
         
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
     
     map=np.zeros((x_len, y_len))
-    
     
     x_min=central_wavelength-40
     x_max=central_wavelength+40
@@ -426,4 +421,116 @@ def EW_map(cube_region,wave,central_wavelength,kernel_size=3):
             
             map[i,j]=ew
             
+    return map
+
+def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plots=False):
+
+    x_len=len(cube_region[0][0])
+    y_len=len(cube_region[0])
+    
+    map=np.zeros((x_len, y_len))
+    
+    
+    for i in range(0,x_len):
+        for j in range(0,y_len):
+            
+            spec=cube_region[:,j,i]
+            
+            x_chopped,y_chopped=chop_data(wave,spec,central_wavelength-50,central_wavelength+50)
+
+            # smooth data
+            y_smooth=smooth_spectra(y_chopped,kernel_size)
+
+
+            # compute continuum with kernel
+            x,y=filterout_peaks(x_chopped,y_smooth)
+            kernel = cosine_kernel(3)
+            cont = convolve(y, kernel, mode='same')
+            
+            max=np.argmax(y_smooth)
+            b1=x_chopped[max]-10
+            b2=x_chopped[max]+10
+            x,y=chop_data(x_chopped,y_smooth,b1,b2)
+
+            x_cont,y_cont=filterout_peaks(x_chopped,y_smooth)
+
+            kernel = cosine_kernel(4)
+            cont = convolve(y_cont, kernel, mode='same')
+            interp=interp1d(x_cont, cont, kind='cubic')
+
+
+            
+            continuum = interp(x)
+
+            
+            
+            # Compute the excess intensity above the continuum            
+            excess_intensity = (continuum-y)/continuum
+
+            
+            
+
+            # Integrate the excess intensity (area over the continuum)
+            area_over_continuum = simps(excess_intensity, x)
+            
+            
+            if plots==True:
+                plt.plot(x, continuum-y, label="cont-spec", color="blue")
+                plt.plot(x, continuum, label="Continuum", linestyle="dashed", color="red")
+                plt.fill_between(x, continuum-y, 0, alpha=0.3, color="green", label="Excess area")
+                plt.xlabel("Wavelength")
+                plt.ylabel("Intensity")
+                plt.legend()
+                plt.show()
+
+            
+            ew=area_over_continuum;
+            print(f"Integral of area over continuum divided by continuum: {area_over_continuum:.2f}")
+            
+            map[i,j]=ew
+    return map
+
+
+
+def velocity(x,y,cont,lambda_rest):
+
+    #xx=np.linspace(np.min(x),np.max(x), 100)  # Generate 100 new points
+
+    c = 3*10**5 # in km/s
+
+
+    num,denom=0,0
+    for i in range(len(x)):
+        denom += 1-y[i]/cont(x[i])
+        num +=  (1-y[i]/cont(x[i])) * x[i]
+
+    v = c/lambda_rest * (num/denom - lambda_rest)
+
+    return v
+
+def velocity_map(cube_region,wave,lambda_obs,lambda_rest,kernel_size=3):
+
+    x_len=len(cube_region[0][0])
+    y_len=len(cube_region[0])
+    
+    map=np.zeros((x_len, y_len))
+    
+    
+    for i in range(0,x_len):
+        for j in range(0,y_len):
+            
+            spec=cube_region[:,j,i]
+
+            # chop data
+            x_chopped,y_chopped=chop_data(wave,spec,lambda_obs-40,lambda_obs+40)
+                        
+            # smooth data
+            y_smooth=smooth_spectra(y_chopped,3)
+                        
+            # fit to continuum
+            cont=continuum(x_chopped,y_smooth)[0]
+                        
+            
+            map[i,j]=velocity(x_chopped,y_chopped,cont,lambda_rest)
+
     return map
