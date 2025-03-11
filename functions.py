@@ -334,6 +334,9 @@ def filterout_peaks(x,y):
 
 def EW_parametric(x,y,cont,bound1,bound2,plots=True):
 
+    
+    x,y=chop_data(x,y,bound1,bound2)
+
     # removing the continuum from the flux data
     flux_reduced = cont(x)-y
 
@@ -348,6 +351,9 @@ def EW_parametric(x,y,cont,bound1,bound2,plots=True):
     flux_reduced_gaussian = lambda x: gaussian(x,*params)
     
     if plots==True:
+        plt.scatter(x, y, label="original data", color="black",s=10)
+        plt.plot(x,cont(x), label="continuuum")
+
         plt.scatter(x, flux_reduced, label="Continuum-Flux (interpolation)", color="red",s=3)
         plt.plot(x_fit, y_fit, label="fit")
         plt.fill_between(x_fit, y_fit, alpha=0.3, color='gray', label="Integral")
