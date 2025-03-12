@@ -266,6 +266,15 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 def gaussian(x, A, mu, sigma):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
+"""def gaussian_polynomial(x, A, mu, sigma, c1, c2, c3):
+    return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) + c1 + c2 * x + c3 * x**2"""
+
+def three_gaussian_poly(x, c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3):
+    background = c0 + c1*x + c2*x**2
+    peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
+    peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
+    peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
+    return background + peak1 + peak2 + peak3
 
 ## chopping data to window view ##
 
@@ -328,28 +337,72 @@ def filterout_peaks(x,y):
 
 ## EW ##
 
-def EW_parametric(x,y,cont,plots=True):
+def EW_parametric(x,y,cont,method=0,plots=True): #
+
 
     max=np.argmax(y)
     bound1,bound2=x[max]-15,x[max]+15
-    x,y=chop_data(x,y,bound1,bound2)
+
     
-    # removing the continuum from the flux data
-    flux_reduced = cont(x)-y
     
+    if method==0: # computing the EW from a fit to (flux-continuum)
+        
+        x,y=chop_data(x,y,bound1,bound2)
+        # removing the continuum from the flux data
+        flux_reduced = cont(x)-y
+        
 
-    initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
-    params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)
-    A_fit, mu_fit, sigma_fit = params
+        initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
+        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)
+        A_fit, mu_fit, sigma_fit = params
 
 
-    x_fit = np.linspace(np.min(x), np.max(x), 100)
-    y_fit = gaussian(x_fit, params[0], params[1], params[2])
+        x_fit = np.linspace(np.min(x), np.max(x), 100)
+        y_fit = gaussian(x_fit, params[0], params[1], params[2])
 
-    flux_reduced_gaussian = lambda x: gaussian(x,*params)
+        flux_reduced_gaussian = lambda x: gaussian(x,*params)
+    
+        xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
+        
+        delta=(bound2-bound1)/50
+        
+        val=0
+        for xi in xx:
+            val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
+        
+    else: # computing the EW from a fit to flux (continuum+gaussian)
+
+        #c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3
+        initial_guess = [0.01, 10, 0.05, np.max(y) , np.mean(x), 5, np.max(y)/3, np.mean(x)-15.5, 3, np.max(y)/3 , np.mean(x)+21, 5]
+        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess)
+        c0_fit, c1_fit, c2_fit, A1_fit, mu1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, mu3_fit, sigma3_fit = params
+                
+        x_fit = np.linspace(np.min(x), np.max(x), 500)
+        y_fit = three_gaussian_poly(x_fit, *params)
+
+        
+
+        # flux_reduced_gaussian is (-1)*gaussian of the main peak
+        flux_reduced_gaussian = lambda x: -gaussian(x,params[3],params[4],params[5])
+        flux_reduced = flux_reduced_gaussian(x)
+
+        plt.plot(x_fit,y_fit,label="fit points")
+        plt.scatter(x,y,label="original data")
+
+        cont = lambda x: three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
+
+        xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
+        
+        delta=(bound2-bound1)/50
+        
+        val=0
+        for xi in xx:
+            val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
+
+
     
     if plots==True:
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(10, 8))
         plt.scatter(x, y, label="Original data", color="black",s=10)
         plt.plot(x,cont(x), label="Continuuum")
         plt.scatter(x, flux_reduced, label="Continuum-Flux", color="red",s=3)
@@ -359,17 +412,9 @@ def EW_parametric(x,y,cont,plots=True):
         plt.ylabel("Y-axis")
         plt.legend()
         plt.title("Finding EW")
-        plt.xlim(6610,6632)
         plt.show()
-    
-    xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
-    
-    delta=(bound2-bound1)/50
-    
-    val=0
-    for x in xx:
-        val+=delta*(flux_reduced_gaussian(x))/cont(x)
-    
+
+
     return val
     
     
@@ -379,7 +424,7 @@ def EW_parametric(x,y,cont,plots=True):
 
 ## Maps ##
 #parametric#
-def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3):
+def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0):
         
 
     x_len=len(cube_region[0][0])
@@ -415,7 +460,7 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3):
             y_continuum_fit = continuum_fit(x_chopped)            
 
             # measuring EW
-            ew=EW_parametric(x_chopped,y_smooth,continuum_fit,plots=True)
+            ew=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots=True)
             
             print("EW=",ew," at (i,j)=",i,",",j)
             
