@@ -314,7 +314,9 @@ def continuum(x,y):
         return
         
     ## fitting the selected points
-    p_coeffs = np.polyfit(x_continuum, y_continuum, 4) #### input incertezas
+    y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+    weights = 1 / y_err
+    p_coeffs,cov = np.polyfit(x_continuum, y_continuum, 4, w=weights, cov=True)
     fit = np.poly1d(p_coeffs)
     
     return fit, x_continuum, y_continuum
@@ -343,7 +345,8 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
     max=np.argmax(y)
     bound1,bound2=x[max]-15,x[max]+15
 
-    
+    if plots==True:
+        plt.figure(figsize=(8, 5))
     
     if method==0: # computing the EW from a fit to (flux-continuum)
         
@@ -351,11 +354,12 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         # removing the continuum from the flux data
         flux_reduced = cont(x)-y
         
+        y_err=np.full(len(flux_reduced), mad(flux_reduced))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+        plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
 
         initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
-        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)
+        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
         A_fit, mu_fit, sigma_fit = params
-
 
         x_fit = np.linspace(np.min(x), np.max(x), 100)
         y_fit = gaussian(x_fit, params[0], params[1], params[2])
@@ -372,25 +376,26 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         
     else: # computing the EW from a fit to flux (continuum+gaussian)
 
+        y_err=np.full(len(y), mad(y))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+        plt.fill_between(x,y - y_err, y + y_err, color='blue', alpha=0.4, label="Uncertainty",zorder=4)
+
+
         #c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3
         initial_guess = [0.01, 10, 0.05, np.max(y) , np.mean(x), 5, np.max(y)/3, np.mean(x)-15.5, 3, np.max(y)/3 , np.mean(x)+21, 5]
-        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess)
+        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=5000, sigma=y_err, absolute_sigma=True)
         c0_fit, c1_fit, c2_fit, A1_fit, mu1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, mu3_fit, sigma3_fit = params
                 
         x_fit = np.linspace(np.min(x), np.max(x), 500)
         y_fit = three_gaussian_poly(x_fit, *params)
 
         
-
         # flux_reduced_gaussian is (-1)*gaussian of the main peak
         flux_reduced_gaussian = lambda x: -gaussian(x,params[3],params[4],params[5])
         flux_reduced = flux_reduced_gaussian(x)
 
-        plt.plot(x_fit,y_fit,label="fit points")
-        plt.scatter(x,y,label="original data")
 
         cont = lambda x: three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
-
+        
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
         delta=(bound2-bound1)/50
@@ -402,14 +407,14 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
 
     
     if plots==True:
-        plt.figure(figsize=(10, 8))
+        
         plt.scatter(x, y, label="Original data", color="black",s=10)
         plt.plot(x,cont(x), label="Continuuum")
         plt.scatter(x, flux_reduced, label="Continuum-Flux", color="red",s=3)
         plt.plot(x_fit, y_fit, label="fit")
         plt.fill_between(x_fit, y_fit, alpha=0.3, color='gray', label="Integral")
-        plt.xlabel("X-axis")
-        plt.ylabel("Y-axis")
+        plt.xlabel("Wavelength")
+        plt.ylabel("Flux")
         plt.legend()
         plt.title("Finding EW")
         plt.show()
