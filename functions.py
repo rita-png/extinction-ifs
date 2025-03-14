@@ -5,7 +5,7 @@ from scipy.fft import fft, ifft
 from PIL import Image
 from scipy.optimize import curve_fit
 from scipy.signal import convolve
-from scipy.integrate import simps
+from scipy.integrate import trapz
 from scipy.interpolate import interp1d
 
 
@@ -314,9 +314,10 @@ def continuum(x,y):
         return
         
     ## fitting the selected points
-    y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-    weights = 1 / y_err
-    p_coeffs,cov = np.polyfit(x_continuum, y_continuum, 4, w=weights, cov=True)
+    #y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+    #weights = 1 / (y_err + 10**(-6))
+    #print("weigths, ", weights)
+    p_coeffs = np.polyfit(x_continuum, y_continuum, 4)#, w=weights, cov=True)
     fit = np.poly1d(p_coeffs)
     
     return fit, x_continuum, y_continuum
@@ -343,7 +344,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
 
 
     max=np.argmax(y)
-    bound1,bound2=x[max]-15,x[max]+15
+    bound1,bound2=x[max]-10,x[max]+10
 
     if plots==True:
         plt.figure(figsize=(8, 5))
@@ -354,30 +355,41 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         # removing the continuum from the flux data
         flux_reduced = cont(x)-y
         
+        
         y_err=np.full(len(flux_reduced), mad(flux_reduced))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-        plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
+        if plots==True:
+            plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
 
         initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
-        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
+        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)#, sigma=y_err, absolute_sigma=True)
+        
         A_fit, mu_fit, sigma_fit = params
 
         x_fit = np.linspace(np.min(x), np.max(x), 100)
         y_fit = gaussian(x_fit, params[0], params[1], params[2])
 
         flux_reduced_gaussian = lambda x: gaussian(x,*params)
-    
+        
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
         delta=(bound2-bound1)/50
         
         val=0
+        val_help=0
+        val_help2=0
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
+            val_help+=delta*cont(xi)
+            val_help2+=delta*(flux_reduced_gaussian(xi))
+
+        print("integral of continuum is ", val_help)
+        print("integral of continuum-flux is ", val_help2)
         
     else: # computing the EW from a fit to flux (continuum+gaussian)
 
         y_err=np.full(len(y), mad(y))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-        plt.fill_between(x,y - y_err, y + y_err, color='blue', alpha=0.4, label="Uncertainty",zorder=4)
+        if plots==True:
+            plt.fill_between(x,y - y_err, y + y_err, color='blue', alpha=0.4, label="Uncertainty",zorder=4)
 
 
         #c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3
@@ -429,7 +441,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
 
 ## Maps ##
 #parametric#
-def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0):
+def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0, plots=False):
         
 
     x_len=len(cube_region[0][0])
@@ -465,7 +477,7 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0
             y_continuum_fit = continuum_fit(x_chopped)            
 
             # measuring EW
-            ew=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots=True)
+            ew=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots)
             
             print("EW=",ew," at (i,j)=",i,",",j)
             
@@ -517,12 +529,21 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             # Compute the excess intensity above the continuum            
             excess_intensity = (continuum-y)/continuum
 
+            # Integrate the excess intensity (area over the continuum)
+            #area_over_continuum = trapz(excess_intensity, x)
             
-            
+            # Interpolating before integrating, so that we have more points
+            f = interp1d(x, excess_intensity, kind='cubic')
+
+            xx=np.linspace(np.min(x),np.max(x), 100)  # Generate 100 new points
+            excess_intensity = f(xx)
+
 
             # Integrate the excess intensity (area over the continuum)
-            area_over_continuum = simps(excess_intensity, x)
-            
+            area_over_continuum = trapz(excess_intensity, xx)
+
+            print("integral of continuum ", trapz(interp(xx), xx))
+            print("integral of continuum-flux ", trapz(continuum-y, x))
             
             if plots==True:
                 plt.plot(x, continuum-y, label="cont-spec", color="blue")
