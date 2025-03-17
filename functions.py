@@ -266,6 +266,9 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 def gaussian(x, A, mu, sigma):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
+def polynomial(x, c1, c2, c3, c4, c5):
+    return  c1 + c2 * x + c3 * x**2 + c4 * x**3 + c5 * x**4
+
 """def gaussian_polynomial(x, A, mu, sigma, c1, c2, c3):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) + c1 + c2 * x + c3 * x**2"""
 
@@ -314,12 +317,15 @@ def continuum(x,y):
         return
         
     ## fitting the selected points
-    #y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-    #weights = 1 / (y_err + 10**(-6))
+    y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+    """weights = 1 / (y_err + 10**(-6))
     #print("weigths, ", weights)
-    p_coeffs = np.polyfit(x_continuum, y_continuum, 4)#, w=weights, cov=True)
-    fit = np.poly1d(p_coeffs)
-    
+    p_coeffs = np.polyfit(x_continuum, y_continuum, 4), w=weights, cov=True)
+    fit = np.poly1d(p_coeffs)"""
+    initial_guess = [1,1,1,1,1]
+    params, covariance = curve_fit(polynomial, x_continuum, y_continuum, p0=initial_guess, sigma=y_err, absolute_sigma=True)
+    fit = lambda x: polynomial(x,*params)
+
     return fit, x_continuum, y_continuum
 
 ## filtering out peaks ##
@@ -361,7 +367,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
             plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
 
         initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
-        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess)#, sigma=y_err, absolute_sigma=True)
+        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
         
         A_fit, mu_fit, sigma_fit = params
 
@@ -372,18 +378,12 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
-        delta=(bound2-bound1)/50
+        delta=xx[2]-xx[1]
         
         val=0
-        val_help=0
-        val_help2=0
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
-            val_help+=delta*cont(xi)
-            val_help2+=delta*(flux_reduced_gaussian(xi))
 
-        print("integral of continuum is ", val_help)
-        print("integral of continuum-flux is ", val_help2)
         
     else: # computing the EW from a fit to flux (continuum+gaussian)
 
@@ -410,7 +410,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
-        delta=(bound2-bound1)/50
+        delta=xx[2]-xx[1]
         
         val=0
         for xi in xx:
@@ -419,6 +419,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
 
     
     if plots==True:
+    
         
         plt.scatter(x, y, label="Original data", color="black",s=10)
         plt.plot(x,cont(x), label="Continuuum")
@@ -477,6 +478,8 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0
             y_continuum_fit = continuum_fit(x_chopped)            
 
             # measuring EW
+            if i==21 and j==15:
+                plots=True
             ew=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots)
             
             print("EW=",ew," at (i,j)=",i,",",j)
@@ -501,7 +504,7 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             x_chopped,y_chopped=chop_data(wave,spec,central_wavelength-50,central_wavelength+50)
 
             # smooth data
-            y_smooth=smooth_spectra(y_chopped,kernel_size)
+            y_smooth=smooth_spectra(y_chopped,kernel_size) # this is not doing anything
 
 
             # compute continuum with kernel
@@ -525,7 +528,6 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             continuum = interp(x)
 
             
-            
             # Compute the excess intensity above the continuum            
             excess_intensity = (continuum-y)/continuum
 
@@ -542,9 +544,13 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             # Integrate the excess intensity (area over the continuum)
             area_over_continuum = trapz(excess_intensity, xx)
 
-            print("integral of continuum ", trapz(interp(xx), xx))
-            print("integral of continuum-flux ", trapz(continuum-y, x))
+
             
+
+            if i==21 and j==15:
+                plots=True
+
+
             if plots==True:
                 plt.plot(x, continuum-y, label="cont-spec", color="blue")
                 plt.plot(x, continuum, label="Continuum", linestyle="dashed", color="red")
@@ -556,7 +562,7 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
 
             
             ew=area_over_continuum;
-            print(f"Integral of area over continuum divided by continuum: {area_over_continuum:.2f}")
+            print(f"Integral of area over continuum divided by continuum: {area_over_continuum:.2f} at (i,j)=",i,", ",j)
             
             map[i,j]=ew
     return map
