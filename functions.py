@@ -266,6 +266,22 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 def gaussian(x, A, mu, sigma):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
+
+def gaussian_error(x, params, cov_matrix): #returns flux error (sigma_f)
+
+    A, mu, sigma = params
+
+    df_dA = np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+    df_dmu = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu) / sigma**2
+    df_dsigma = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu)**2 / sigma**3
+    
+    sigma_A = cov_matrix[0,0]
+    sigma_mu = cov_matrix[1,1]
+    sigma_sigma = cov_matrix[2,2]
+
+    return np.sqrt(df_dA * sigma_A + df_dmu * sigma_mu + df_dsigma * sigma_sigma)
+
+
 def polynomial(x, c1, c2, c3, c4, c5):
     return  c1 + c2 * x + c3 * x**2 + c4 * x**3 + c5 * x**4
 
@@ -278,6 +294,9 @@ def three_gaussian_poly(x, c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3
     peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return background + peak1 + peak2 + peak3
+
+def EW_error():
+
 
 ## chopping data to window view ##
 
@@ -369,6 +388,11 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
         params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
         
+        #print("cov ",covariance)
+        #print("sigma f is ", gaussian_error(x, params, covariance))
+
+        print(" ")
+
         A_fit, mu_fit, sigma_fit = params
 
         x_fit = np.linspace(np.min(x), np.max(x), 100)
@@ -381,8 +405,10 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         delta=xx[2]-xx[1]
         
         val=0
+        err=0
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
+            #err+=delta*(np.sqrt())
 
         
     else: # computing the EW from a fit to flux (continuum+gaussian)
@@ -413,6 +439,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         delta=xx[2]-xx[1]
         
         val=0
+ 
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
 
@@ -420,6 +447,8 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
     
     if plots==True:
     
+        #plot of error propagated to f
+        #plt.fill_between(x, cont(x)-y-gaussian_error(x, params, covariance),cont(x)-y+gaussian_error(x, params, covariance), alpha=0.3, color='red', label="propagated error of f")
         
         plt.scatter(x, y, label="Original data", color="black",s=10)
         plt.plot(x,cont(x), label="Continuuum")
@@ -433,7 +462,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         plt.show()
 
 
-    return val
+    return val,err
     
     
 
@@ -449,6 +478,7 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0
     y_len=len(cube_region[0])
     
     map=np.zeros((x_len, y_len))
+    error_map=np.zeros((x_len, y_len))
     
     x_min=central_wavelength-40
     x_max=central_wavelength+40
@@ -478,15 +508,16 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0
             y_continuum_fit = continuum_fit(x_chopped)            
 
             # measuring EW
-            if i==21 and j==15:
-                plots=True
-            ew=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots)
+            """if i==21 and j==15:
+                plots=True"""
+            ew,err=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots)
             
             print("EW=",ew," at (i,j)=",i,",",j)
             
             map[i,j]=ew
+            error_map[i,j]=err
             
-    return map
+    return map, error_map
 
 def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plots=False):
 
@@ -547,8 +578,8 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
 
             
 
-            if i==21 and j==15:
-                plots=True
+            """if i==21 and j==15:
+                plots=True"""
 
 
             if plots==True:
