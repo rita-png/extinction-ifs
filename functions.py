@@ -267,19 +267,25 @@ def gaussian(x, A, mu, sigma):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
 
-def gaussian_error(x, params, cov_matrix): #returns flux error (sigma_f)
+def gaussian_error(params, cov_matrix): #returns flux error (sigma_f)
 
     A, mu, sigma = params
 
-    df_dA = np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
-    df_dmu = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu) / sigma**2
-    df_dsigma = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu)**2 / sigma**3
+    #df_dA = np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+    df_dA = lambda x:  np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+    #df_dmu = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu) / sigma**2
+    df_dmu = lambda x: A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu) / sigma**2
+    
+    #df_dsigma = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu)**2 / sigma**3
+    df_dsigma = lambda x: A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu)**2 / sigma**3
     
     sigma_A = np.sqrt(cov_matrix[0,0])
     sigma_mu = np.sqrt(cov_matrix[1,1])
     sigma_sigma = np.sqrt(cov_matrix[2,2])
 
-    return np.sqrt((df_dA * sigma_A)**2 + (df_dmu * sigma_mu)**2 + (df_dsigma * sigma_sigma)**2)
+    err = lambda x: np.sqrt((df_dA(x) * sigma_A)**2 + (df_dmu(x) * sigma_mu)**2 + (df_dsigma(x) * sigma_sigma)**2)
+
+    return err #np.sqrt((df_dA * sigma_A)**2 + (df_dmu * sigma_mu)**2 + (df_dsigma * sigma_sigma)**2)
 
 
 def polynomial(x, c1, c2, c3, c4, c5):
@@ -289,7 +295,7 @@ def polynomial_error(x, params, cov_matrix): #returns flux error (sigma_c)
 
     c1, c2, c3, c4, c5 = params
 
-    df_dc1 = c1
+    df_dc1 = 1
     df_dc2 = x
     df_dc3 = x**2
     df_dc4 = x**3
@@ -300,7 +306,7 @@ def polynomial_error(x, params, cov_matrix): #returns flux error (sigma_c)
     sigma_c3 = np.sqrt(cov_matrix[2,2])
     sigma_c4 = np.sqrt(cov_matrix[3,3])
     sigma_c5 = np.sqrt(cov_matrix[4,4])
-    print("OLAAA, ", cov_matrix)
+    
     return np.sqrt((df_dc1 * sigma_c1)**2 + (df_dc2 * sigma_c2)**2 + (df_dc3 * sigma_c3)**2 + (df_dc4 * sigma_c4)**2 + (df_dc5 * sigma_c5)**2)
 
 """def gaussian_polynomial(x, A, mu, sigma, c1, c2, c3):
@@ -313,13 +319,6 @@ def three_gaussian_poly(x, c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return background + peak1 + peak2 + peak3
 
-
-"""def EW_error_parametric(Delta): #this outputs the EW error for the parametric approach
-    
-
-    polynomial_error(x_continuum, params, covariance)
-
-    return s"""
 
 ## chopping data to window view ##
 
@@ -372,8 +371,8 @@ def continuum(x,y):
     params, covariance = curve_fit(polynomial, x_continuum, y_continuum, p0=initial_guess, sigma=y_err, absolute_sigma=True)
     fit = lambda x: polynomial(x-k,*params)
 
-    
-    return fit, x_continuum+k, y_continuum
+    err_cont = lambda x: polynomial_error(x-k, params, covariance)
+    return fit, x_continuum+k, y_continuum, err_cont
 
 ## filtering out peaks ##
 
@@ -393,11 +392,12 @@ def filterout_peaks(x,y):
 
 ## EW ##
 
-def EW_parametric(x,y,MUSE_err,cont,method=0,plots=True): #
+def EW_parametric(x,y,MUSE_err,cont,cont_error,method=0,plots=True): #
 
 
     max=np.argmax(y)
     bound1,bound2=x[max]-10,x[max]+10
+    err=0
 
     if plots==True:
         plt.figure(figsize=(8, 5))
@@ -408,10 +408,7 @@ def EW_parametric(x,y,MUSE_err,cont,method=0,plots=True): #
         # removing the continuum from the flux data
         flux_reduced = cont(x)-y
         
-        
         y_err=np.full(len(flux_reduced), mad(flux_reduced))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-        #MUSE_err=np.nanmedian(ebulge[bound1:bound2], axis=(1, 2))
-
 
         if plots==True:
             plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
@@ -419,27 +416,24 @@ def EW_parametric(x,y,MUSE_err,cont,method=0,plots=True): #
         initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
         params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
         
-        #print("cov ",covariance)
-        #print("sigma f is ", gaussian_error(x, params, covariance))
-
-        print(" ")
-
+        
         A_fit, mu_fit, sigma_fit = params
 
         x_fit = np.linspace(np.min(x), np.max(x), 100)
         y_fit = gaussian(x_fit, params[0], params[1], params[2])
 
         flux_reduced_gaussian = lambda x: gaussian(x,*params)
-        
+        gaussian_err=gaussian_error(params, covariance)
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
         delta=xx[2]-xx[1]
         
         val=0
         err=0
+        MUSE_err=y_err[1]
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
-            err+=delta*(np.sqrt( (-1/cont(xi))**2 * Muse_err[i]**2 + (f_i/cont(xi)**2)**2 * cont_error[i]**2 + (1/cont(xi))**2 * gaussian_error**2 ))
+            err+=delta*(np.sqrt( (-1/cont(xi))**2 * MUSE_err**2 + ((cont(xi)-flux_reduced_gaussian(xi))/cont(xi)**2)**2 * cont_error(xi)**2 + (1/cont(xi))**2 * gaussian_err(xi)**2 ))
             
 
         
@@ -503,7 +497,7 @@ def EW_parametric(x,y,MUSE_err,cont,method=0,plots=True): #
 
 ## Maps ##
 #parametric#
-def EW_map_parametric(cube_region,wave,ecube,central_wavelength,kernel_size=3,method=0, plots=False):
+def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3,method=0, plots=False):
         
 
     x_len=len(cube_region[0][0])
@@ -536,15 +530,16 @@ def EW_map_parametric(cube_region,wave,ecube,central_wavelength,kernel_size=3,me
                 continuum_fit=aux[0]
                 x_cont=aux[1]
                 y_cont=aux[2]
+                continuum_error=aux[3]
             
-            y_continuum_fit = continuum_fit(x_chopped)            
+            y_continuum_fit = continuum_fit(x_chopped)          
 
             # measuring EW
             """if i==21 and j==15:
                 plots=True"""
-            ew,err=EW_parametric(x_chopped,y_smooth,ecube,continuum_fit,method, plots)
-            
-            print("EW=",ew," at (i,j)=",i,",",j)
+            ew,err=EW_parametric(x_chopped,y_smooth,MUSE_err,continuum_fit,continuum_error,method, plots)
+
+            print("EW = %.3f"%ew," +/- %.3f"%err," at (i,j)=",i,",",j)
             
             map[i,j]=ew
             error_map[i,j]=err
