@@ -275,15 +275,33 @@ def gaussian_error(x, params, cov_matrix): #returns flux error (sigma_f)
     df_dmu = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu) / sigma**2
     df_dsigma = A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) * (x - mu)**2 / sigma**3
     
-    sigma_A = cov_matrix[0,0]
-    sigma_mu = cov_matrix[1,1]
-    sigma_sigma = cov_matrix[2,2]
+    sigma_A = np.sqrt(cov_matrix[0,0])
+    sigma_mu = np.sqrt(cov_matrix[1,1])
+    sigma_sigma = np.sqrt(cov_matrix[2,2])
 
-    return np.sqrt(df_dA * sigma_A + df_dmu * sigma_mu + df_dsigma * sigma_sigma)
+    return np.sqrt((df_dA * sigma_A)**2 + (df_dmu * sigma_mu)**2 + (df_dsigma * sigma_sigma)**2)
 
 
 def polynomial(x, c1, c2, c3, c4, c5):
     return  c1 + c2 * x + c3 * x**2 + c4 * x**3 + c5 * x**4
+
+def polynomial_error(x, params, cov_matrix): #returns flux error (sigma_c)
+
+    c1, c2, c3, c4, c5 = params
+
+    df_dc1 = c1
+    df_dc2 = x
+    df_dc3 = x**2
+    df_dc4 = x**3
+    df_dc5 = x**4
+    
+    sigma_c1 = np.sqrt(cov_matrix[0,0])
+    sigma_c2 = np.sqrt(cov_matrix[1,1])
+    sigma_c3 = np.sqrt(cov_matrix[2,2])
+    sigma_c4 = np.sqrt(cov_matrix[3,3])
+    sigma_c5 = np.sqrt(cov_matrix[4,4])
+    print("OLAAA, ", cov_matrix)
+    return np.sqrt((df_dc1 * sigma_c1)**2 + (df_dc2 * sigma_c2)**2 + (df_dc3 * sigma_c3)**2 + (df_dc4 * sigma_c4)**2 + (df_dc5 * sigma_c5)**2)
 
 """def gaussian_polynomial(x, A, mu, sigma, c1, c2, c3):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) + c1 + c2 * x + c3 * x**2"""
@@ -295,19 +313,28 @@ def three_gaussian_poly(x, c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return background + peak1 + peak2 + peak3
 
-def EW_error():
 
+"""def EW_error_parametric(Delta): #this outputs the EW error for the parametric approach
+    
+
+    polynomial_error(x_continuum, params, covariance)
+
+    return s"""
 
 ## chopping data to window view ##
 
-def chop_data(x,y,x_min,x_max):
-    
+def chop_data(x,y,x_min,x_max,err=[]):
     
     mask = (x >= x_min) & (x <= x_max)
-    x_chopped, y_chopped = x[mask], y[mask]
     
-    return x_chopped, y_chopped
+    
+    if len(err)<1: #if no errors are inputted
+        x_chopped, y_chopped = x[mask], y[mask]
+        return x_chopped, y_chopped
 
+    else:
+        x_chopped, y_chopped, err_chopped = x[mask], y[mask], err[mask]
+        return x_chopped, y_chopped, err_chopped
 
 ## cosine kernel ##
 
@@ -328,6 +355,9 @@ def continuum(x,y):
 
     ## selecting points for continuum
     x_continuum,y_continuum=filterout_peaks(x,y)
+    
+    k = np.mean(x_continuum)
+    x_continuum -= k
 
     if len(y_continuum)==0:
         plt.plot(x,y)
@@ -337,15 +367,13 @@ def continuum(x,y):
         
     ## fitting the selected points
     y_err=np.full(len(y_continuum), mad(y_continuum))#np.sqrt(np.median(ebulge, axis=(1, 2)));
-    """weights = 1 / (y_err + 10**(-6))
-    #print("weigths, ", weights)
-    p_coeffs = np.polyfit(x_continuum, y_continuum, 4), w=weights, cov=True)
-    fit = np.poly1d(p_coeffs)"""
-    initial_guess = [1,1,1,1,1]
+    
+    initial_guess = [100,1,1,1,1]
     params, covariance = curve_fit(polynomial, x_continuum, y_continuum, p0=initial_guess, sigma=y_err, absolute_sigma=True)
-    fit = lambda x: polynomial(x,*params)
+    fit = lambda x: polynomial(x-k,*params)
 
-    return fit, x_continuum, y_continuum
+    
+    return fit, x_continuum+k, y_continuum
 
 ## filtering out peaks ##
 
@@ -365,7 +393,7 @@ def filterout_peaks(x,y):
 
 ## EW ##
 
-def EW_parametric(x,y,cont,method=0,plots=True): #
+def EW_parametric(x,y,MUSE_err,cont,method=0,plots=True): #
 
 
     max=np.argmax(y)
@@ -382,6 +410,9 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         
         
         y_err=np.full(len(flux_reduced), mad(flux_reduced))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+        #MUSE_err=np.nanmedian(ebulge[bound1:bound2], axis=(1, 2))
+
+
         if plots==True:
             plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
 
@@ -408,7 +439,8 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
         err=0
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
-            #err+=delta*(np.sqrt())
+            err+=delta*(np.sqrt( (-1/cont(xi))**2 * Muse_err[i]**2 + (f_i/cont(xi)**2)**2 * cont_error[i]**2 + (1/cont(xi))**2 * gaussian_error**2 ))
+            
 
         
     else: # computing the EW from a fit to flux (continuum+gaussian)
@@ -471,7 +503,7 @@ def EW_parametric(x,y,cont,method=0,plots=True): #
 
 ## Maps ##
 #parametric#
-def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0, plots=False):
+def EW_map_parametric(cube_region,wave,ecube,central_wavelength,kernel_size=3,method=0, plots=False):
         
 
     x_len=len(cube_region[0][0])
@@ -510,7 +542,7 @@ def EW_map_parametric(cube_region,wave,central_wavelength,kernel_size=3,method=0
             # measuring EW
             """if i==21 and j==15:
                 plots=True"""
-            ew,err=EW_parametric(x_chopped,y_smooth,continuum_fit,method, plots)
+            ew,err=EW_parametric(x_chopped,y_smooth,ecube,continuum_fit,method, plots)
             
             print("EW=",ew," at (i,j)=",i,",",j)
             
