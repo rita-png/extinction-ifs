@@ -493,7 +493,24 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method=0,plots=True): #
     
 
 
+def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
 
+    #g==(c-y)/c
+    #computing sigma_g
+    
+    sigma_g=[]
+
+    for i in range(0,len(cont)):
+        sigma_g.append(np.sqrt((sigma_f/cont[i])**2 + (g[i]* sigma_c / cont[i])**2))
+        
+    sum=0
+
+    for i in range(0,len(sigma_g)-1):
+        sum += (Delta/2)**2 * (sigma_g[i]**2 + sigma_g[i+1]**2)
+
+    err_integral = np.sqrt(sum)
+
+    return err_integral
 
 ## Maps ##
 #parametric#
@@ -503,7 +520,7 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
     
-    map=np.zeros((x_len, y_len))
+    ew_map=np.zeros((x_len, y_len))
     error_map=np.zeros((x_len, y_len))
     
     x_min=central_wavelength-40
@@ -541,17 +558,18 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
 
             print("EW = %.3f"%ew," +/- %.3f"%err," at (i,j)=",i,",",j)
             
-            map[i,j]=ew
+            ew_map[i,j]=ew
             error_map[i,j]=err
             
-    return map, error_map
+    return ew_map, error_map
 
 def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plots=False):
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
     
-    map=np.zeros((x_len, y_len))
+    ew_map=np.zeros((x_len, y_len))
+    err_map=np.zeros((x_len, y_len))
     
     
     for i in range(0,x_len):
@@ -593,17 +611,20 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             #area_over_continuum = trapz(excess_intensity, x)
             
             # Interpolating before integrating, so that we have more points
-            f = interp1d(x, excess_intensity, kind='cubic')
+            g = interp1d(x, excess_intensity, kind='cubic')
 
             xx=np.linspace(np.min(x),np.max(x), 100)  # Generate 100 new points
-            excess_intensity = f(xx)
+            excess_intensity = g(xx)
 
 
             # Integrate the excess intensity (area over the continuum)
             area_over_continuum = trapz(excess_intensity, xx)
 
 
-            
+            # EW error computation
+            err_cont=mad(interp(xx))
+            err_f=mad(y)
+            err=error_non_parametric(xx[2]-xx[1],interp(xx),err_cont,g(xx),err_f)
 
             """if i==21 and j==15:
                 plots=True"""
@@ -619,11 +640,12 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
                 plt.show()
 
             
-            ew=area_over_continuum;
-            print(f"Integral of area over continuum divided by continuum: {area_over_continuum:.2f} at (i,j)=",i,", ",j)
+            ew=area_over_continuum
+            print(f"Integral of area over continuum divided by continuum: {area_over_continuum:.3f} +/- {err:.3f} at (i,j)=",i,", ",j)
             
-            map[i,j]=ew
-    return map
+            ew_map[i,j]=ew
+            err_map[i,j]=err
+    return ew_map,err_map
 
 
 
