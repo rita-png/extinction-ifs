@@ -7,6 +7,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import convolve
 from scipy.integrate import trapz
 from scipy.interpolate import interp1d
+from vorbin.voronoi_2d_binning import voronoi_2d_binning
 
 
 import matplotlib.animation as animation
