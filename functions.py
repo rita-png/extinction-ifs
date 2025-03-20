@@ -262,6 +262,49 @@ def binning(image, pix_width): #this ignores the existence of NaNs
                 
     return matrix
 
+
+## voronoi binning ##
+
+
+def voronoi(flux_map,noise_values,plots=False):
+
+
+
+    ny, nx = flux_map.shape
+    x_coords, y_coords = np.meshgrid(np.arange(nx), np.arange(ny))
+    x_coords = x_coords.ravel()
+    y_coords = y_coords.ravel()
+    flux_values = flux_map.ravel()
+
+    target_snr = 20
+
+    out = voronoi_2d_binning(x_coords, y_coords, flux_values, noise_values, target_snr, plot=plots, quiet=True);
+
+    bin_num = out[0]
+    x_bin = out[1]
+    y_bin = out[2]
+    sn_bin = out[3]
+    n_pixels = out[4]
+
+    if plots==True:
+        plt.figure(figsize=(8, 6))
+        plt.scatter(x_coords, y_coords, c=bin_num, cmap='Blues_r', s=5)
+        plt.colorbar(label="Bin ##index")
+        plt.title(f"Voronoi Binning using target SNR={target_snr}")
+        plt.show()
+
+    binned_data = np.zeros(len(flux_values))
+
+    for i in range(0,len(n_pixels)):
+        bin_mask = bin_num == i
+        binned_data[bin_mask] = np.nanmedian(flux_values[bin_mask])
+        
+    binned_data = np.transpose(binned_data.reshape(ny,nx))
+
+    return binned_data
+
+
+
 ## fitting ##
 
 def gaussian(x, A, mu, sigma):
