@@ -266,7 +266,7 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 ## voronoi binning ##
 
 
-def voronoi(flux_map,noise_values,plots=False):
+def voronoi(flux_map,noise_values,target_snr=20,plots=False):
 
 
 
@@ -276,9 +276,9 @@ def voronoi(flux_map,noise_values,plots=False):
     y_coords = y_coords.ravel()
     flux_values = flux_map.ravel()
 
-    target_snr = 20
+    target_snr
 
-    out = voronoi_2d_binning(x_coords, y_coords, flux_values, noise_values, target_snr, plot=plots, quiet=True);
+    out = voronoi_2d_binning(x_coords, y_coords, flux_values, noise_values, target_snr, plot=plots, quiet=True)
 
     bin_num = out[0]
     x_bin = out[1]
@@ -356,13 +356,17 @@ def polynomial_error(x, params, cov_matrix): #returns flux error (sigma_c)
 """def gaussian_polynomial(x, A, mu, sigma, c1, c2, c3):
     return A * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) + c1 + c2 * x + c3 * x**2"""
 
-def three_gaussian_poly(x, c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3):
-    background = c0 + c1*x + c2*x**2
+def background(x,c0,c1):
+    return c0 + c1*x
+
+def three_gaussian_poly(x, c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3,shift1=14.8,shift2=20.6):
+    bg =  background(x,c0,c1)#+ c2*x**2
+    mu1=mu2-shift1
+    mu3=mu2+shift2
     peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
     peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
-    return background + peak1 + peak2 + peak3
-
+    return bg + peak1 + peak2 + peak3
 
 ## chopping data to window view ##
 
@@ -436,7 +440,7 @@ def filterout_peaks(x,y):
 
 ## EW ##
 
-def EW_parametric(x,y,MUSE_err,cont,cont_error,method=0,plots=True): #
+def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6623.2630764): #
 
 
     max=np.argmax(y)
@@ -488,24 +492,26 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method=0,plots=True): #
             plt.fill_between(x,y - y_err, y + y_err, color='blue', alpha=0.4, label="Uncertainty",zorder=4)
 
 
-        #c0, c1, c2, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3
-        initial_guess = [0.01, 10, 0.05, np.max(y) , np.mean(x), 5, np.max(y)/3, np.mean(x)-15.5, 3, np.max(y)/3 , np.mean(x)+21, 5]
-        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=5000, sigma=y_err, absolute_sigma=True)
-        c0_fit, c1_fit, c2_fit, A1_fit, mu1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, mu3_fit, sigma3_fit = params
+        #c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3
+        initial_guess = [1, 1, np.max(y)/3, 5, np.max(y), central_wavelength, 3, np.max(y)/3, 5]
+        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=8000, sigma=y_err, absolute_sigma=True)
+        c0_fit, c1_fit, A1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, sigma3_fit = params
                 
         x_fit = np.linspace(np.min(x), np.max(x), 500)
         y_fit = three_gaussian_poly(x_fit, *params)
 
         
         # flux_reduced_gaussian is (-1)*gaussian of the main peak
-        flux_reduced_gaussian = lambda x: -gaussian(x,params[3],params[4],params[5])
+        flux_reduced_gaussian = lambda xi: -1*gaussian(xi, A2_fit, mu2_fit,sigma2_fit)
+        
         flux_reduced = flux_reduced_gaussian(x)
 
-
-        cont = lambda x: three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
+        cont = lambda xi: background(xi,c0_fit,c1_fit)#three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
         
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
+        
+
         delta=xx[2]-xx[1]
         
         val=0
@@ -560,7 +566,7 @@ def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
 #parametric#
 def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3,method=0, plots=False):
         
-
+    
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
     
@@ -594,11 +600,11 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
                 continuum_error=aux[3]
             
             y_continuum_fit = continuum_fit(x_chopped)          
-
+            
             # measuring EW
             """if i==21 and j==15:
                 plots=True"""
-            ew,err=EW_parametric(x_chopped,y_smooth,MUSE_err,continuum_fit,continuum_error,method, plots)
+            ew,err=EW_parametric(x_chopped,y_smooth,MUSE_err,continuum_fit,continuum_error,method,plots)
 
             print("EW = %.3f"%ew," +/- %.3f"%err," at (i,j)=",i,",",j)
             
