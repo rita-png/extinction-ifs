@@ -515,10 +515,10 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6
         delta=xx[2]-xx[1]
         
         val=0
- 
+    
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
-
+            #err+=delta*(np.sqrt( (1/cont(xi))**2 * err_flux_reduced **2 + ((flux_reduced_gaussian(xi))/cont(xi)**2)**2 * cont_error(xi)**2 + )
 
     
     if plots==True:
