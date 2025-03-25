@@ -8,6 +8,7 @@ from scipy.signal import convolve
 from scipy.integrate import trapz
 from scipy.interpolate import interp1d
 from vorbin.voronoi_2d_binning import voronoi_2d_binning
+from scipy.ndimage import convolve1d
 
 
 import matplotlib.animation as animation
@@ -395,13 +396,13 @@ def cosine_kernel(size):
 def smooth_spectra(y,kernel_size):
 
     kernel = cosine_kernel(kernel_size)
-    y_smooth = convolve(y, kernel, mode='same')
+    y_smooth = convolve1d(y, kernel, mode='nearest')
     return y_smooth
 
-def continuum(x,y):
+def continuum(x,y,mode="dips"):
 
     ## selecting points for continuum
-    x_continuum,y_continuum=filterout_peaks(x,y)
+    x_continuum,y_continuum=filterout_peaks(x,y,mode)
     
     k = np.mean(x_continuum)
     x_continuum -= k
@@ -424,9 +425,9 @@ def continuum(x,y):
 
 ## filtering out peaks ##
 
-def filterout_peaks(x,y):
-    Q1 = np.percentile(y, 30)
-    Q3 = np.percentile(y, 70)
+"""def filterout_peaks(x,y,low=30,high=70):
+    Q1 = np.percentile(y, low)
+    Q3 = np.percentile(y, high)
     IQR = Q3 - Q1
     threshold = Q3 + 1.5 * IQR
 
@@ -435,8 +436,28 @@ def filterout_peaks(x,y):
     filtered_y=(y)[mask]
     #filtered_y = y[y < threshold]  # Remove peaks
     
-    return filtered_x, filtered_y
+    return filtered_x, filtered_y"""
 
+
+def filterout_peaks(x, y, mode="peaks", low=30, high=70):
+    
+    Q1 = np.percentile(y, low)
+    Q3 = np.percentile(y, high)
+    IQR = Q3 - Q1
+    upper_threshold = Q3 + 1.5 * IQR  # Threshold for peaks
+    lower_threshold = Q1 - 1.5 * IQR  # Threshold for dips
+
+    if mode == "peaks":
+        mask = y < upper_threshold  # Remove peaks
+    elif mode == "dips":
+        mask = y > lower_threshold  # Remove dips
+    else:  # mode == "both"
+        mask = (y > lower_threshold) & (y < upper_threshold)  # Remove both peaks and dips
+
+    filtered_x = x[mask]
+    filtered_y = y[mask]
+
+    return filtered_x, filtered_y
 
 ## EW ##
 
@@ -613,7 +634,7 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
             
     return ew_map, error_map
 
-def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plots=False):
+def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3,plots=False):
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
@@ -628,28 +649,24 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
             spec=cube_region[:,j,i]
             
             x_chopped,y_chopped=chop_data(wave,spec,central_wavelength-50,central_wavelength+50)
-
+            
             # smooth data
-            y_smooth=smooth_spectra(y_chopped,kernel_size) # this is not doing anything
+            y_smooth=smooth_spectra(y_chopped,6) # this is not doing anything
 
 
             # compute continuum with kernel
-            x,y=filterout_peaks(x_chopped,y_smooth)
-            kernel = cosine_kernel(3)
-            cont = convolve(y, kernel, mode='same')
+            x_cont,y_cont=filterout_peaks(x_chopped,y_smooth,mode)
             
-            max=np.argmax(y_smooth)
-            b1=x_chopped[max]-10
-            b2=x_chopped[max]+10
-            x,y=chop_data(x_chopped,y_smooth,b1,b2)
-
-            x_cont,y_cont=filterout_peaks(x_chopped,y_smooth)
-
-            kernel = cosine_kernel(4)
-            cont = convolve(y_cont, kernel, mode='same')
+            kernel = cosine_kernel(kernel_size)
+            cont = convolve1d(y_cont, kernel, mode='nearest')
             interp=interp1d(x_cont, cont, kind='cubic')
-
-
+            
+            #max=np.argmax(y_smooth)
+            #b1=x_chopped[max]-10
+            #b2=x_chopped[max]+10
+            b1=central_wavelength-10
+            b2=central_wavelength+10
+            x,y=chop_data(x_chopped,y_smooth,b1,b2)
             
             continuum = interp(x)
 
@@ -681,6 +698,8 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,kernel_size=3,plot
 
 
             if plots==True:
+                plt.scatter(x_cont,y_cont,color="yellow",label="selected points for continuum")
+                plt.plot(x_chopped,y_smooth,label="smooth spectra")
                 plt.plot(x, continuum-y, label="cont-spec", color="blue")
                 plt.plot(x, continuum, label="Continuum", linestyle="dashed", color="red")
                 plt.fill_between(x, continuum-y, 0, alpha=0.3, color="green", label="Excess area")
