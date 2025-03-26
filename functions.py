@@ -399,7 +399,7 @@ def smooth_spectra(y,kernel_size):
     y_smooth = convolve1d(y, kernel, mode='nearest')
     return y_smooth
 
-def continuum(x,y,mode="dips"):
+def continuum(x,y,mode="both"):
 
     ## selecting points for continuum
     x_continuum,y_continuum=filterout_peaks(x,y,mode)
@@ -610,7 +610,7 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
             y_smooth=smooth_spectra(y_chopped,kernel_size)
             
             # fit to continuum
-            aux=continuum(x_chopped,y_smooth)
+            aux=continuum(x_chopped,y_smooth,mode="peaks")
             if(aux==None): # skipping the i,j pixel in case we cannot find the continuum
                 map[i,j]=np.nan
                 continue 
@@ -698,11 +698,11 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
 
 
             if plots==True:
-                plt.scatter(x_cont,y_cont,color="yellow",label="selected points for continuum")
+                plt.scatter(x_cont,y_cont,color="yellow",label="points for continuum")
                 plt.plot(x_chopped,y_smooth,label="smooth spectra")
-                plt.plot(x, continuum-y, label="cont-spec", color="blue")
+                plt.plot(x, continuum-y, label="cont-spec", color="black")
                 plt.plot(x, continuum, label="Continuum", linestyle="dashed", color="red")
-                plt.fill_between(x, continuum-y, 0, alpha=0.3, color="green", label="Excess area")
+                plt.fill_between(x, (continuum-y), 0, alpha=0.3, color="green", label="Excess area")
                 plt.xlabel("Wavelength")
                 plt.ylabel("Intensity")
                 plt.legend()
@@ -720,9 +720,10 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
 
 def velocity(x,y,cont,lambda_rest):
 
-    #xx=np.linspace(np.min(x),np.max(x), 100)  # Generate 100 new points
-
+   
     c = 3*10**5 # in km/s
+
+    x,y=chop_data(x,y,lambda_rest-4,lambda_rest+4)
 
 
     num,denom=0,0
@@ -732,9 +733,41 @@ def velocity(x,y,cont,lambda_rest):
 
     v = c/lambda_rest * (num/denom - lambda_rest)
 
+    """if v>0:
+        plt.plot(x,y)
+        plt.axvline(x=num/denom)
+        plt.show()"""
+
     return v
 
-def velocity_map(cube_region,wave,lambda_obs,lambda_rest,kernel_size=3):
+# computing the EW from a fit to flux (continuum+gaussian)
+
+def velocity_parametric(x,y,MUSE_err,rest_wavelenght):
+
+
+    max=np.argmax(y)
+    bound1,bound2=x[max]-10,x[max]+10
+    err=0    
+    
+
+    y_err=np.full(len(y), mad(y))#np.sqrt(np.median(ebulge, axis=(1, 2)));
+
+    #c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3
+    initial_guess = [1, 1, np.max(y)/3, 5, np.max(y), rest_wavelenght, 3, np.max(y)/3, 5]
+    params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=8000, sigma=y_err, absolute_sigma=True)
+    c0_fit, c1_fit, A1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, sigma3_fit = params
+            
+    x_fit = np.linspace(np.min(x), np.max(x), 500)
+    y_fit = three_gaussian_poly(x_fit, *params)
+
+    val = 3*10**5 * (mu2_fit-rest_wavelenght) / rest_wavelenght
+    #c/lambda_rest * (num/denom - lambda_rest)
+    err = 3*10**5 / rest_wavelenght * (covariance[6,6])
+
+    return val,err
+    
+# non parametric map
+def velocity_map(cube_region,wave,lambda_rest,kernel_size=3):
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
@@ -748,15 +781,49 @@ def velocity_map(cube_region,wave,lambda_obs,lambda_rest,kernel_size=3):
             spec=cube_region[:,j,i]
 
             # chop data
-            x_chopped,y_chopped=chop_data(wave,spec,lambda_obs-40,lambda_obs+40)
+            x_chopped,y_chopped=chop_data(wave,spec,lambda_rest-40,lambda_rest+40)
                         
             # smooth data
             y_smooth=smooth_spectra(y_chopped,3)
                         
             # fit to continuum
-            cont=continuum(x_chopped,y_smooth)[0]
+            cont=continuum(x_chopped,y_smooth,mode="peaks")[0]
                         
             
             map[i,j]=velocity(x_chopped,y_chopped,cont,lambda_rest)
 
     return map
+
+#parametric#
+def velocity_map_parametric(cube_region,wave,MUSE_err,rest_wavelenght,kernel_size=3):
+        
+    
+    x_len=len(cube_region[0][0])
+    y_len=len(cube_region[0])
+    
+    v_map=np.zeros((x_len, y_len))
+    error_map=np.zeros((x_len, y_len))
+    
+    x_min=rest_wavelenght-40
+    x_max=rest_wavelenght+40
+            
+    for i in range(0,x_len):
+        for j in range(0,y_len):
+            
+            spec=cube_region[:,j,i]
+            
+            # chop data
+            x_chopped,y_chopped=chop_data(wave,spec,x_min,x_max)
+            
+            # smooth data
+            y_smooth=smooth_spectra(y_chopped,kernel_size)
+                   
+            # measuring velocity
+            vel,err=velocity_parametric(x_chopped,y_smooth,MUSE_err,rest_wavelenght)
+
+            print("velocity = %.3f"%vel," +/- %.3f"%err," at (i,j)=",i,",",j)
+            
+            v_map[i,j]=vel
+            error_map[i,j]=err
+            
+    return v_map, error_map
