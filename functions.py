@@ -336,6 +336,9 @@ def gaussian_error(params, cov_matrix): #returns flux error (sigma_f)
 def polynomial(x, c1, c2, c3, c4, c5):
     return  c1 + c2 * x + c3 * x**2 + c4 * x**3 + c5 * x**4
 
+def polynomial_line(x, c1, c2):
+    return  c1 + c2 * x
+
 def polynomial_error(x, params, cov_matrix): #returns flux error (sigma_c)
 
     c1, c2, c3, c4, c5 = params
@@ -363,11 +366,29 @@ def background(x,c0,c1):
 def three_gaussian_poly(x, c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3,shift1=14.8,shift2=20.6):
     bg =  background(x,c0,c1)#+ c2*x**2
     mu1=mu2-shift1
-    mu3=mu2+shift2
+    mu3=mu2+3
     peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
     peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return bg + peak1 + peak2 + peak3
+
+def two_gaussian_poly(x, c0, c1, A1, mu1, sigma1, A2, mu2,sigma2,shift):
+    bg =  background(x,c0,c1)
+    
+    mu2=mu1+shift
+    peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
+    peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
+
+    return bg + peak1 + peak2
+
+def two_gaussian_poly_nobg(x, A1, mu1, sigma1, A2, mu2,sigma2,shift=4.5):
+ 
+    mu2=mu1+shift
+    peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
+    peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
+
+    return peak1 + peak2
+
 
 ## chopping data to window view ##
 
@@ -423,6 +444,30 @@ def continuum(x,y,mode="both"):
     err_cont = lambda x: polynomial_error(x-k, params, covariance)
     return fit, x_continuum+k, y_continuum, err_cont
 
+def continuum_line(x,y,mode="both"):
+
+    ## selecting points for continuum
+    x_continuum,y_continuum=filterout_peaks(x,y,mode)
+    
+    k = np.mean(x_continuum)
+    x_continuum -= k
+
+    if len(y_continuum)==0:
+        plt.plot(x,y)
+        plt.show()
+        print("Couldn't find continuum")
+        return
+        
+    ## fitting the selected points
+    y_err=np.full(len(y_continuum), mad(y_continuum))
+    
+    initial_guess = [100,1]
+    params, covariance = curve_fit(polynomial_line, x_continuum, y_continuum, p0=initial_guess, sigma=y_err, absolute_sigma=True)
+    fit = lambda x: polynomial_line(x-k,*params)
+
+    err_cont = lambda x: polynomial_error(x-k, params, covariance)
+    return fit, x_continuum+k, y_continuum, err_cont
+
 ## filtering out peaks ##
 
 """def filterout_peaks(x,y,low=30,high=70):
@@ -461,18 +506,20 @@ def filterout_peaks(x, y, mode="peaks", low=30, high=70):
 
 ## EW ##
 
-def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6623.2630764): #
+def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,fit="Halpha",central_wavelength=6623.2630764): #
+    
+    if fit=="Halpha":
+        max=np.argmax(y)
+        bound1,bound2=x[max]-10,x[max]+10
+    else:
+        bound1,bound2=central_wavelength-50,central_wavelength+50
 
-
-    max=np.argmax(y)
-    bound1,bound2=x[max]-10,x[max]+10
     err=0
 
     if plots==True:
         plt.figure(figsize=(8, 5))
     
     if method==0: # computing the EW from a fit to (flux-continuum)
-        
         x,y=chop_data(x,y,bound1,bound2)
         # removing the continuum from the flux data
         flux_reduced = cont(x)-y
@@ -481,18 +528,31 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6
 
         if plots==True:
             plt.fill_between(x,flux_reduced - y_err, flux_reduced + y_err, color='blue', alpha=0.1, label="Uncertainty")
-
-        initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
-        params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
         
-        
-        A_fit, mu_fit, sigma_fit = params
-
         x_fit = np.linspace(np.min(x), np.max(x), 100)
-        y_fit = gaussian(x_fit, params[0], params[1], params[2])
 
-        flux_reduced_gaussian = lambda x: gaussian(x,*params)
-        gaussian_err=gaussian_error(params, covariance)
+        if fit=="Halpha":
+            initial_guess = [np.max(flux_reduced), np.mean(x), np.std(x)]
+            params, covariance = curve_fit(gaussian, x, flux_reduced, p0=initial_guess, sigma=y_err, absolute_sigma=True)
+            A_fit, mu_fit, sigma_fit = params
+            
+            y_fit = gaussian(x_fit, params[0], params[1], params[2])
+            flux_reduced_gaussian = lambda x: gaussian(x,*params)
+            gaussian_err=gaussian_error(params, covariance)
+        elif fit=="Na":
+            height=np.max(flux_reduced)
+            initial_guess = [height,central_wavelength,1,height*0.7,2,0.5,4.5]
+            params, covariance = curve_fit(two_gaussian_poly_nobg, x, flux_reduced, p0=initial_guess,maxfev = 8000)#input errors!
+            
+            y_fit = two_gaussian_poly_nobg(x_fit, *params)
+            flux_reduced_gaussian = lambda x: two_gaussian_poly_nobg(x,*params)
+            gaussian_err=0#??????
+            
+        
+
+        
+        
+
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
         delta=xx[2]-xx[1]
@@ -502,42 +562,61 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6
         MUSE_err=y_err[1]
         for xi in xx:
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
-            err+=delta*(np.sqrt( (-1/cont(xi))**2 * MUSE_err**2 + ((cont(xi)-flux_reduced_gaussian(xi))/cont(xi)**2)**2 * cont_error(xi)**2 + (1/cont(xi))**2 * gaussian_err(xi)**2 ))
+            #err+=delta*(np.sqrt( (-1/cont(xi))**2 * MUSE_err**2 + ((cont(xi)-flux_reduced_gaussian(xi))/cont(xi)**2)**2 * cont_error(xi)**2 + (1/cont(xi))**2 * gaussian_err(xi)**2 ))
             
 
         
-    else: # computing the EW from a fit to flux (continuum+gaussian)
+    elif method==1: # computing the EW from a fit to flux (continuum+gaussian)
 
+        
         y_err=np.full(len(y), mad(y))#np.sqrt(np.median(ebulge, axis=(1, 2)));
         if plots==True:
             plt.fill_between(x,y - y_err, y + y_err, color='blue', alpha=0.4, label="Uncertainty",zorder=4)
 
-        
-        #c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3
-        initial_guess = [1, 1, np.max(y)/3, 3, np.max(y), central_wavelength, 5, np.max(y)/2, 3]
-        params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=8000, sigma=y_err, absolute_sigma=True)
-        c0_fit, c1_fit, A1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, sigma3_fit = params
-                
-        x_fit = np.linspace(np.min(x), np.max(x), 500)
-        y_fit = three_gaussian_poly(x_fit, *params)
+        if fit=="Halpha":
+            #c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3
+            initial_guess = [1, 1, np.max(y)/3, 3, np.max(y), central_wavelength, 5, np.max(y)/2, 3]
+            params, covariance = curve_fit(three_gaussian_poly, x, y, p0=initial_guess, maxfev=8000, sigma=y_err, absolute_sigma=True)
+            c0_fit, c1_fit, A1_fit, sigma1_fit, A2_fit, mu2_fit, sigma2_fit, A3_fit, sigma3_fit = params
+                    
+            x_fit = np.linspace(np.min(x), np.max(x), 500)
+            y_fit = three_gaussian_poly(x_fit, *params)
 
-        
-        # flux_reduced_gaussian is (-1)*gaussian of the main peak
-        flux_reduced_gaussian = lambda xi: -1*gaussian(xi, A2_fit, mu2_fit,sigma2_fit)
-        
-        flux_reduced = flux_reduced_gaussian(x)
+            
+            # flux_reduced_gaussian is (-1)*gaussian of the main peak
+            flux_reduced_gaussian = lambda xi: -1*gaussian(xi, A2_fit, mu2_fit,sigma2_fit)
+            
+            flux_reduced = flux_reduced_gaussian(x)
 
-        cont = lambda xi: background(xi,c0_fit,c1_fit)#three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
+            cont = lambda xi: background(xi,c0_fit,c1_fit)#three_gaussian_poly(x,*params) + flux_reduced_gaussian(x)
+        elif fit=="Na":
+            height=np.max(y)-np.min(y)
+            initial_guess = [2,0.5,height,central_wavelength,1,height,2,1,4.5]
+            params, covariance = curve_fit(two_gaussian_poly, x, y, p0=initial_guess)#input errors!
+            
+            fit_exp = lambda xi: two_gaussian_poly(xi,*params)
+            print("!!!! lenx",len(x))
+            x_fit = np.linspace(np.min(x), np.max(x), 500)
+            y_fit = two_gaussian_poly(x_fit, *params)
+
+            c0_fit, c1_fit = params[0],params[1]
+            cont = lambda xi: background(xi,c0_fit,c1_fit)
+            
+            flux_reduced_gaussian = lambda xi: cont(xi) - fit_exp(xi)
+
+            flux_reduced = flux_reduced_gaussian(x)
+            
+
+
         
         xx=np.linspace(bound1,bound2, 100)  # Generate 100 new points
         
-        
-
         delta=xx[2]-xx[1]
         
         val=0
     
         for xi in xx:
+            
             val+=delta*(flux_reduced_gaussian(xi))/cont(xi)
             #err+=delta*(np.sqrt( (1/cont(xi))**2 * err_flux_reduced **2 + ((flux_reduced_gaussian(xi))/cont(xi)**2)**2 * cont_error(xi)**2 + )
 
@@ -547,11 +626,17 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,central_wavelength=6
         #plot of error propagated to f
         #plt.fill_between(x, cont(x)-y-gaussian_error(x, params, covariance),cont(x)-y+gaussian_error(x, params, covariance), alpha=0.3, color='red', label="propagated error of f")
         
+        
         plt.scatter(x, y, label="Original data", color="black",s=10)
         plt.plot(x,cont(x), label="Continuuum")
+        
         plt.scatter(x, flux_reduced, label="Continuum-Flux", color="red",s=3)
+        plt.plot(x,flux_reduced_gaussian(x),color="yellow",label="cont-fit",linewidth=0.5)
         plt.plot(x_fit, y_fit, label="fit")
-        plt.fill_between(x_fit, y_fit, alpha=0.3, color='gray', label="Integral")
+        if fit=="Halpha":
+            plt.fill_between(x_fit, y_fit, alpha=0.3, color='gray', label="Integral")
+        if fit=="Na":
+            plt.fill_between(x, flux_reduced_gaussian(x), alpha=0.3, color='gray', label="Integral")
         plt.xlabel("Wavelength")
         plt.ylabel("Flux")
         plt.legend()
@@ -585,7 +670,7 @@ def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
 
 ## Maps ##
 #parametric#
-def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3,method=0, plots=False):
+def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,mode="peaks",kernel_size=3,method=0, plots=False,fit="Halpha"):
         
     
     x_len=len(cube_region[0][0])
@@ -594,8 +679,8 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
     ew_map=np.zeros((x_len, y_len))
     error_map=np.zeros((x_len, y_len))
     
-    x_min=central_wavelength-40
-    x_max=central_wavelength+40
+    x_min=central_wavelength-50
+    x_max=central_wavelength+50
             
     for i in range(0,x_len):
         for j in range(0,y_len):
@@ -610,7 +695,11 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
             y_smooth=smooth_spectra(y_chopped,kernel_size)
             
             # fit to continuum
-            aux=continuum(x_chopped,y_smooth,mode="peaks")
+            if fit=="Halpha":
+                aux=continuum(x_chopped,y_smooth,mode)
+            elif fit=="Na":
+                aux=continuum_line(x_chopped,y_smooth,mode)
+
             if(aux==None): # skipping the i,j pixel in case we cannot find the continuum
                 map[i,j]=np.nan
                 continue 
@@ -622,11 +711,12 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,kernel_size=3
             
             y_continuum_fit = continuum_fit(x_chopped)          
             
+            
             # measuring EW
             """if i==21 and j==15:
                 plots=True"""
-            ew,err=EW_parametric(x_chopped,y_smooth,MUSE_err,continuum_fit,continuum_error,method,plots)
-
+            ew,err=EW_parametric(x_chopped,y_smooth,MUSE_err,continuum_fit,continuum_error,method,plots,fit,central_wavelength=central_wavelength)
+            print(np.min(x_chopped),np.max(x_chopped))
             print("EW = %.3f"%ew," +/- %.3f"%err," at (i,j)=",i,",",j)
             
             ew_map[i,j]=ew
@@ -678,11 +768,12 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
             #area_over_continuum = trapz(excess_intensity, x)
             
             # Interpolating before integrating, so that we have more points
+            
             g = interp1d(x, excess_intensity, kind='cubic')
 
             xx=np.linspace(np.min(x),np.max(x), 100)  # Generate 100 new points
             excess_intensity = g(xx)
-
+            
 
             # Integrate the excess intensity (area over the continuum)
             area_over_continuum = trapz(excess_intensity, xx)
