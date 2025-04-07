@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 from vorbin.voronoi_2d_binning import voronoi_2d_binning
 from scipy.ndimage import convolve1d
 import math
-
+from astropy.wcs import WCS
 import matplotlib.animation as animation
 
 
@@ -595,7 +595,7 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,fit="Halpha",central
             params, covariance = curve_fit(two_gaussian_poly, x, y, p0=initial_guess)#input errors!
             
             fit_exp = lambda xi: two_gaussian_poly(xi,*params)
-            print("!!!! lenx",len(x))
+            #print("!!!! lenx",len(x))
             x_fit = np.linspace(np.min(x), np.max(x), 500)
             y_fit = two_gaussian_poly(x_fit, *params)
 
@@ -754,8 +754,11 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
             #max=np.argmax(y_smooth)
             #b1=x_chopped[max]-10
             #b2=x_chopped[max]+10
-            b1=central_wavelength-10
-            b2=central_wavelength+10
+            #b1=central_wavelength-10
+            #b2=central_wavelength+10
+            b1=central_wavelength*(1-1000/(3*10**5))
+            b2=central_wavelength*(1+1000/(3*10**5))
+
             x,y=chop_data(x_chopped,y_smooth,b1,b2)
             
             continuum = interp(x)
@@ -867,7 +870,7 @@ def velocity_parametric(x,y,MUSE_err,rest_wavelenght,i,j):
     
     
 # non parametric map
-def velocity_map(cube_region,wave,lambda_rest,kernel_size=3):
+def velocity_map(cube_region,wave,lambda_rest,kernel_size=3,mode="both"):
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
@@ -881,16 +884,27 @@ def velocity_map(cube_region,wave,lambda_rest,kernel_size=3):
             spec=cube_region[:,j,i]
 
             # chop data
-            x_chopped,y_chopped=chop_data(wave,spec,lambda_rest-40,lambda_rest+40)
+            b1=lambda_rest-40
+            b2=lambda_rest+40
+            x_chopped,y_chopped=chop_data(wave,spec,b1,b2)
                         
             # smooth data
             y_smooth=smooth_spectra(y_chopped,3)
                         
             # fit to continuum
-            cont=continuum(x_chopped,y_smooth,mode="peaks")[0]
+            #cont=continuum(x_chopped,y_smooth,mode="peaks")[0]
+
+            # compute continuum with kernel
+            x_cont,y_cont=filterout_peaks(x_chopped,y_smooth,mode)
+            
+            kernel = cosine_kernel(kernel_size)
+            cont = convolve1d(y_cont, kernel, mode='nearest')
+            interp=interp1d(x_cont, cont, kind='cubic')
+            
+            continuum = interp
                         
             
-            map[i,j]=velocity(x_chopped,y_chopped,cont,lambda_rest)
+            map[i,j]=velocity(x_chopped,y_chopped,continuum,lambda_rest)
 
     return map
 
