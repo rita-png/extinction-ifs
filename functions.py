@@ -13,6 +13,14 @@ import math
 from astropy.wcs import WCS
 import matplotlib.animation as animation
 
+from astropy.coordinates import SkyCoord
+from astroquery.gaia import Gaia
+import astropy.units as u
+from astropy.wcs import WCS
+from astropy.visualization import simple_norm
+from photutils.detection import DAOStarFinder
+from astropy.stats import sigma_clipped_stats
+
 
 ## visualization ##
 
@@ -941,3 +949,101 @@ def velocity_map_parametric(cube_region,wave,MUSE_err,rest_wavelenght,kernel_siz
             error_map[i,j]=err
             
     return v_map, error_map
+
+
+# matching MUSE stars to Gaia
+
+def match_gaia(sources,header,ra,dec,width=0.2,height=0.2):
+    
+
+    Gaia.MAIN_GAIA_TABLE = "gaiaedr3.gaia_source"#edr3 or dr2
+    Gaia.ROW_LIMIT = -1
+
+    ## get ra,dec from WCS astrometry header
+    wcs_header = WCS(header)
+    coords = wcs_header.pixel_to_world(sources[:,0],sources[:,1], np.full(len(sources), 0))
+
+    print(coords)
+    ## get Gaia catalog around center ra/dec values
+    cencoord = SkyCoord(ra=ra,dec=dec,unit=(u.deg,u.deg),frame='icrs')
+
+
+    width,height = u.Quantity(width, u.deg),u.Quantity(height, u.deg)
+    gaia_stars = Gaia.query_object_async(coordinate=cencoord, width=width, height=height)
+    gaia_coords = SkyCoord(ra=gaia_stars['ra'],dec=gaia_stars['dec'])
+
+    ## match catalogs
+    gidx, gd2d, gd3d = coords[0].match_to_catalog_sky(gaia_coords)
+    gbestidx=(gd2d.deg < 0.0008)                         #<0.00015deg=0.54''
+
+    ## output variables
+    star_ra,star_dec = np.zeros(len(sources),dtype=float),np.zeros(len(sources),dtype=float)
+    star_ra[:],star_dec[:] = np.nan,np.nan
+    star_ra[gbestidx] = gaia_stars['ra'][gidx[gbestidx]]
+    star_dec[gbestidx] = gaia_stars['dec'][gidx[gbestidx]]
+    star_par,star_parer = np.zeros(len(sources),dtype=float)*np.nan,np.zeros(len(sources),dtype=float)*np.nan
+    star_par[gbestidx] = gaia_stars['parallax'][gidx[gbestidx]]
+    star_parer[gbestidx] = gaia_stars['parallax_error'][gidx[gbestidx]]
+
+    return star_ra,star_dec,star_par,star_parer
+
+def gaia_parameters(matched_ras,matched_decs):
+    star_ra=matched_ras
+    star_dec=matched_decs
+    
+    parallax_array = np.full(len(star_ra), np.nan)
+    eff_t_array = np.full(len(star_ra), np.nan)
+    surface_g_array = np.full(len(star_ra), np.nan)
+    metallicity_array = np.full(len(star_ra), np.nan)
+
+    
+    for i in range(len(star_ra)):
+        
+        ra = star_ra[i]
+        dec = star_dec[i]
+
+        if np.isnan(ra) or np.isnan(dec):
+            continue  # skip if either value is NaN
+
+        print(f"Searching for star with RA = {ra}, Dec = {dec}")
+
+        coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg, frame='icrs')
+        radius_deg = (1 * u.arcsec).to(u.deg).value
+
+        query = f"""
+        SELECT g.source_id, g.ra, g.dec, g.phot_g_mean_mag, g.parallax, g.parallax_error,
+           a.teff_gspphot, a.logg_gspphot, a.mh_gspphot
+        FROM gaiadr3.gaia_source AS g
+        LEFT JOIN gaiadr3.astrophysical_parameters AS a
+          ON g.source_id = a.source_id
+        WHERE 1=CONTAINS(
+          POINT('ICRS', g.ra, g.dec),
+          CIRCLE('ICRS', {coord.ra.deg}, {coord.dec.deg}, {radius_deg})
+        )
+        """
+
+
+
+        try:
+            job = Gaia.launch_job_async(query)
+            result = job.get_results()
+
+            if len(result) == 0:
+                print("No match found.")
+            else:
+                parallax_array[i] = result[0]["parallax"]
+                eff_t_array[i] = result[0]["teff_gspphot"]
+                surface_g_array[i] = result[0]["logg_gspphot"]
+                metallicity_array[i] = result[0]["mh_gspphot"]
+                
+                print(f"Parallax: {result[0]['parallax']} ± {result[0]['parallax_error']}")
+                print(f"Effective temperature: ", result[0]['teff_gspphot'])
+                print(f"Surface gravity log(g) : ", result[0]['logg_gspphot'])
+                print(f"Metalicity: ", result[0]['mh_gspphot'])#feh_gspspec
+
+        except Exception as e:
+            print(f"Query failed for index {i}: {e}")
+
+        print(" ")
+    return parallax_array,eff_t_array,surface_g_array,metallicity_array
+
