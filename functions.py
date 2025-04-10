@@ -12,6 +12,7 @@ from scipy.ndimage import convolve1d
 import math
 from astropy.wcs import WCS
 import matplotlib.animation as animation
+import pandas as pd
 
 from astropy.coordinates import SkyCoord
 from astroquery.gaia import Gaia
@@ -412,6 +413,16 @@ def chop_data(x,y,x_min,x_max,err=[]):
     else:
         x_chopped, y_chopped, err_chopped = x[mask], y[mask], err[mask]
         return x_chopped, y_chopped, err_chopped
+
+
+## remove duplicate points from theoretical spectra
+
+def average_duplicate_wavelengths(wavelength, flux):
+    
+    df = pd.DataFrame({'wavelength': wavelength, 'flux': flux})
+    df_unique = df.groupby('wavelength', as_index=False).mean()
+    return df_unique['wavelength'].values, df_unique['flux'].values
+
 
 ## cosine kernel ##
 
@@ -1101,4 +1112,53 @@ def EW_point_sources(cube, sources, wave, na_rest):
         print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
+    return EW_array, EW_err_array
+
+
+
+def EW_theoretical_spectra(wavelength,flux, na_rest):
+    EW_array=[]
+    EW_err_array=[]
+
+
+    x_chopped,y_chopped=chop_data(wavelength,flux,na_rest-80,na_rest+80)
+
+    x_chopped,y_chopped=average_duplicate_wavelengths(x_chopped,y_chopped)
+    # continuum
+    x,y=x_chopped,y_chopped
+    x_cont,y_cont=filterout_peaks(x,y,mode="both")
+
+    kernel_size=60
+    kernel = cosine_kernel(kernel_size)
+    cont = convolve1d(y_cont, kernel, mode='nearest')
+
+    interp=interp1d(x_cont, cont, kind='cubic')
+
+
+
+    v=1000
+    bound1=na_rest*(1-v/(3*10**5))
+
+    bound2=na_rest*(1+v/(3*10**5))
+    x,y=chop_data(x,y,bound1,bound2)
+
+    cont = interp(x)
+
+    # Compute the excess intensity above the continuum
+    excess_intensity = (cont-y)/cont
+    err_f=mad(y)
+    g = interp1d(x, excess_intensity, kind='cubic')
+
+    # Integrate the excess intensity (area over the continuum)
+    area_over_continuum = trapz(excess_intensity, x)
+    #continuum_summed = simps(continuum_fit(x), x)
+
+    # Compute uncertainty
+
+    err_cont=mad(interp(x))
+    err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
+
+    print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
+    EW_array.append(area_over_continuum)
+    EW_err_array.append(err)
     return EW_array, EW_err_array
