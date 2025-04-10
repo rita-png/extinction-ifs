@@ -1047,3 +1047,58 @@ def gaia_parameters(matched_ras,matched_decs):
         print(" ")
     return parallax_array,eff_t_array,surface_g_array,metallicity_array
 
+
+
+def EW_point_sources(cube, sources, wave, na_rest):
+    EW_array=[]
+    EW_err_array=[]
+    for i in range(0,len(sources)):
+        
+        y_pos=sources[i][1]
+        x_pos=sources[i][0]
+
+        data=cube[:,y_pos,x_pos]
+
+
+        
+        x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
+
+        y_smooth=smooth_spectra(y_chopped,kernel_size=6)
+        # continuum
+        x,y=x_chopped,y_smooth
+        x_cont,y_cont=filterout_peaks(x,y,mode="both")
+
+        kernel_size=60
+        kernel = cosine_kernel(kernel_size)
+        cont = convolve1d(y_cont, kernel, mode='nearest')
+        interp=interp1d(x_cont, cont, kind='cubic')
+
+
+
+        v=1000
+        bound1=na_rest*(1-v/(3*10**5))
+
+        bound2=na_rest*(1+v/(3*10**5))
+        x,y=chop_data(x,y,bound1,bound2)
+
+        cont = interp(x)
+
+        # Compute the excess intensity above the continuum
+        excess_intensity = (cont-y)/cont
+        err_f=mad(y)
+        g = interp1d(x, excess_intensity, kind='cubic')
+
+        # Integrate the excess intensity (area over the continuum)
+        area_over_continuum = trapz(excess_intensity, x)
+        #continuum_summed = simps(continuum_fit(x), x)
+
+        # Compute uncertainty
+
+        err_cont=mad(interp(x))
+        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
+
+
+        print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
+        EW_array.append(area_over_continuum)
+        EW_err_array.append(err)
+    return EW_array, EW_err_array
