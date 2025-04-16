@@ -22,6 +22,10 @@ from astropy.visualization import simple_norm
 from photutils.detection import DAOStarFinder
 from astropy.stats import sigma_clipped_stats
 
+from species import SpeciesInit
+from species.data.database import Database
+from species.read.read_model import ReadModel
+from species.plot.plot_spectrum import plot_spectrum
 
 ## visualization ##
 
@@ -1003,6 +1007,7 @@ def gaia_parameters(matched_ras,matched_decs):
     star_dec=matched_decs
     
     parallax_array = np.full(len(star_ra), np.nan)
+    parallax_err_array = np.full(len(star_ra), np.nan)
     eff_t_array = np.full(len(star_ra), np.nan)
     surface_g_array = np.full(len(star_ra), np.nan)
     metallicity_array = np.full(len(star_ra), np.nan)
@@ -1043,6 +1048,7 @@ def gaia_parameters(matched_ras,matched_decs):
                 print("No match found.")
             else:
                 parallax_array[i] = result[0]["parallax"]
+                parallax_err_array[i] = result[0]["parallax_error"]
                 eff_t_array[i] = result[0]["teff_gspphot"]
                 surface_g_array[i] = result[0]["logg_gspphot"]
                 metallicity_array[i] = result[0]["mh_gspphot"]
@@ -1051,14 +1057,15 @@ def gaia_parameters(matched_ras,matched_decs):
                 print(f"Effective temperature: ", result[0]['teff_gspphot'])
                 print(f"Surface gravity log(g) : ", result[0]['logg_gspphot'])
                 print(f"Metalicity: ", result[0]['mh_gspphot'])#feh_gspspec
+                print(f"Metalicity error here!: ", result[0]['mh_gspphot_error'])
+                print(f"Metalicity twooo!: ", result[0]['feh_gspphot'])
+                
 
         except Exception as e:
             print(f"Query failed for index {i}: {e}")
 
         print(" ")
-    return parallax_array,eff_t_array,surface_g_array,metallicity_array
-
-
+    return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array
 
 def EW_point_sources(cube, sources, wave, na_rest):
     EW_array=[]
@@ -1162,3 +1169,34 @@ def EW_theoretical_spectra(wavelength,flux, na_rest):
     EW_array.append(area_over_continuum)
     EW_err_array.append(err)
     return EW_array, EW_err_array
+
+
+
+def generate_spectra(model,stars_data,figures=False):
+
+    spectra=[]
+    RES=20000
+    for i in range(0,len(stars_data)):
+        model_param = {'teff':stars_data.iloc[i]['teff'], 'logg':stars_data.iloc[i]['logg'], 'feh':stars_data.iloc[i]['met'], 'distance':1/stars_data.iloc[i]['parallax']}
+
+        model_box = model.get_model(model_param=model_param, spec_res=RES)
+        model_ext = model.get_model(model_param=model_param, spec_res=RES)
+
+        if figures==True:
+            print(model_box.open_box())
+
+            fig = plot_spectrum(boxes=[model_box, model_ext],
+                            filters=['MKO/NSFCam.J', 'MKO/NSFCam.H', 'MKO/NSFCam.K', 'MKO/NSFCam.Lp', 'MKO/NSFCam.Mp'],
+                            legend={'loc': 'upper right', 'frameon': False, 'fontsize': 8.5},
+                            figsize=(7., 3.),
+                            output=None)
+
+        b1,b2=(5890-30)*0.0001,(5896+30)*0.0001
+
+        x=model_box.wavelength
+        #x*=10000
+        y=model_box.flux
+
+        spectra.append([x,y])
+
+    return spectra
