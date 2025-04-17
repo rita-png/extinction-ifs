@@ -687,6 +687,7 @@ def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
     for i in range(0,len(sigma_g)-1):
         sum += (Delta/2)**2 * (sigma_g[i]**2 + sigma_g[i+1]**2)
 
+    noise= mad(cont)
     err_integral = np.sqrt(sum)
 
     return err_integral
@@ -1011,6 +1012,7 @@ def gaia_parameters(matched_ras,matched_decs):
     eff_t_array = np.full(len(star_ra), np.nan)
     surface_g_array = np.full(len(star_ra), np.nan)
     metallicity_array = np.full(len(star_ra), np.nan)
+    mean_mag = np.full(len(star_ra), np.nan)
 
     
     for i in range(len(star_ra)):
@@ -1043,6 +1045,8 @@ def gaia_parameters(matched_ras,matched_decs):
         try:
             job = Gaia.launch_job_async(query)
             result = job.get_results()
+            print("warning")
+            print(result.columns)
 
             if len(result) == 0:
                 print("No match found.")
@@ -1052,22 +1056,21 @@ def gaia_parameters(matched_ras,matched_decs):
                 eff_t_array[i] = result[0]["teff_gspphot"]
                 surface_g_array[i] = result[0]["logg_gspphot"]
                 metallicity_array[i] = result[0]["mh_gspphot"]
+                mean_mag[i] = result[0]["phot_g_mean_mag"]
                 
                 print(f"Parallax: {result[0]['parallax']} ± {result[0]['parallax_error']}")
                 print(f"Effective temperature: ", result[0]['teff_gspphot'])
-                print(f"Surface gravity log(g) : ", result[0]['logg_gspphot'])
+                print(f"Surface gravity log(g): ", result[0]['logg_gspphot'])
                 print(f"Metalicity: ", result[0]['mh_gspphot'])#feh_gspspec
-                print(f"Metalicity error here!: ", result[0]['mh_gspphot_error'])
-                print(f"Metalicity twooo!: ", result[0]['feh_gspphot'])
-                
+                print(f"Mean magnitude: ", result[0]['phot_g_mean_mag'])
 
         except Exception as e:
             print(f"Query failed for index {i}: {e}")
 
         print(" ")
-    return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array
+    return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
-def EW_point_sources(cube, sources, wave, na_rest):
+def EW_point_sources(cube, sources, wave, na_rest,plots=False):
     EW_array=[]
     EW_err_array=[]
     for i in range(0,len(sources)):
@@ -1075,7 +1078,7 @@ def EW_point_sources(cube, sources, wave, na_rest):
         y_pos=sources[i][1]
         x_pos=sources[i][0]
 
-        data=cube[:,y_pos,x_pos]
+        data=stack_all(cube[:,y_pos-5:y_pos+5,x_pos-5:x_pos+5])#cube[:,y_pos,x_pos]#new
 
 
         
@@ -1085,6 +1088,8 @@ def EW_point_sources(cube, sources, wave, na_rest):
         # continuum
         x,y=x_chopped,y_smooth
         x_cont,y_cont=filterout_peaks(x,y,mode="both")
+
+        noise = mad(y_cont)
 
         kernel_size=60
         kernel = cosine_kernel(kernel_size)
@@ -1106,6 +1111,10 @@ def EW_point_sources(cube, sources, wave, na_rest):
         err_f=mad(y)
         g = interp1d(x, excess_intensity, kind='cubic')
 
+        if plots==True:
+            plt.plot(x,y,label="integral")
+            plt.plot(x_chopped,y_chopped,label="spectra")
+            plt.show()
         # Integrate the excess intensity (area over the continuum)
         area_over_continuum = trapz(excess_intensity, x)
         #continuum_summed = simps(continuum_fit(x), x)
@@ -1115,6 +1124,8 @@ def EW_point_sources(cube, sources, wave, na_rest):
         err_cont=mad(interp(x))
         err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
 
+        #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
+        #err=np.sqrt(noise)
 
         print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
         EW_array.append(area_over_continuum)
@@ -1123,13 +1134,14 @@ def EW_point_sources(cube, sources, wave, na_rest):
 
 
 
-def EW_theoretical_spectra(wavelength,flux, na_rest):
+def EW_theoretical_spectra(wavelength,flux, na_rest,plots=False):
     EW_array=[]
     EW_err_array=[]
 
 
     x_chopped,y_chopped=chop_data(wavelength,flux,na_rest-80,na_rest+80)
 
+    
     x_chopped,y_chopped=average_duplicate_wavelengths(x_chopped,y_chopped)
     # continuum
     x,y=x_chopped,y_chopped
@@ -1143,7 +1155,7 @@ def EW_theoretical_spectra(wavelength,flux, na_rest):
 
 
 
-    v=1000
+    v=500
     bound1=na_rest*(1-v/(3*10**5))
 
     bound2=na_rest*(1+v/(3*10**5))
@@ -1156,12 +1168,14 @@ def EW_theoretical_spectra(wavelength,flux, na_rest):
     err_f=mad(y)
     g = interp1d(x, excess_intensity, kind='cubic')
 
+    if plots==True:
+        plt.plot(x,excess_intensity)
+        plt.show()
     # Integrate the excess intensity (area over the continuum)
     area_over_continuum = trapz(excess_intensity, x)
     #continuum_summed = simps(continuum_fit(x), x)
 
     # Compute uncertainty
-
     err_cont=mad(interp(x))
     err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
 
