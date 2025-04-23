@@ -15,7 +15,7 @@ import matplotlib.animation as animation
 import pandas as pd
 
 from astropy.coordinates import SkyCoord
-from astroquery.gaia import Gaia
+#from astroquery.gaia import Gaia
 import astropy.units as u
 from astropy.wcs import WCS
 from astropy.visualization import simple_norm
@@ -242,6 +242,22 @@ def signaltonoise_spec(spec, uncertainty):
         snr = np.asarray(spec) / np.asarray(uncertainty)
     
     return snr
+## circurlar aperture ##
+
+
+def circular_aperture(x_center, y_center, radius):
+    
+    r = int(np.ceil(radius))
+    pixels = []
+
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx**2 + dy**2 <= radius**2:
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+                pixels.append((x, y))
+
+    return pixels
 
 
 ## binning ##
