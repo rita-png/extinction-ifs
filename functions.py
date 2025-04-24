@@ -15,7 +15,7 @@ import matplotlib.animation as animation
 import pandas as pd
 
 from astropy.coordinates import SkyCoord
-#from astroquery.gaia import Gaia
+from astroquery.gaia import Gaia
 import astropy.units as u
 from astropy.wcs import WCS
 from astropy.visualization import simple_norm
@@ -244,20 +244,24 @@ def signaltonoise_spec(spec, uncertainty):
     return snr
 ## circurlar aperture ##
 
-
-def circular_aperture(x_center, y_center, radius):
+def circular_aperture(cube, x_center, y_center, radius):
     
     r = int(np.ceil(radius))
     pixels = []
+    stacked_spectrum = np.zeros(cube.shape[0])  # initialize 1D spectrum array
 
     for dx in range(-r, r + 1):
         for dy in range(-r, r + 1):
             if dx**2 + dy**2 <= radius**2:
                 x = int(x_center + dx)
                 y = int(y_center + dy)
-                pixels.append((x, y))
 
-    return pixels
+                # Check bounds
+                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
+                    pixels.append((x, y))
+                    stacked_spectrum += cube[:, y, x]  # note: y is row, x is column
+
+    return stacked_spectrum#, pixels
 
 
 ## binning ##
@@ -764,7 +768,7 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,mode="peaks",
             
     return ew_map, error_map
 
-def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3,plots=False):
+def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3,plots=False,velocity_window=1000):
 
     x_len=len(cube_region[0][0])
     y_len=len(cube_region[0])
@@ -796,8 +800,8 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
             #b2=x_chopped[max]+10
             #b1=central_wavelength-10
             #b2=central_wavelength+10
-            b1=central_wavelength*(1-1000/(3*10**5))
-            b2=central_wavelength*(1+1000/(3*10**5))
+            b1=central_wavelength*(1-velocity_window/(3*10**5))
+            b2=central_wavelength*(1+velocity_window/(3*10**5))
 
             x,y=chop_data(x_chopped,y_smooth,b1,b2)
             
@@ -1086,7 +1090,7 @@ def gaia_parameters(matched_ras,matched_decs):
         print(" ")
     return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
-def EW_point_sources(cube, sources, wave, na_rest,plots=False):
+def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
     EW_array=[]
     EW_err_array=[]
     for i in range(0,len(sources)):
@@ -1094,13 +1098,14 @@ def EW_point_sources(cube, sources, wave, na_rest,plots=False):
         y_pos=sources[i][1]
         x_pos=sources[i][0]
 
-        data=stack_all(cube[:,y_pos-5:y_pos+5,x_pos-5:x_pos+5])#cube[:,y_pos,x_pos]#new
+        #data=cube[:,y_pos,x_pos]
+        data=circular_aperture(cube,x_pos, y_pos, radius)#new
 
 
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
 
-        y_smooth=smooth_spectra(y_chopped,kernel_size=6)
+        y_smooth=smooth_spectra(y_chopped,kernel_size=3)
         # continuum
         x,y=x_chopped,y_smooth
         x_cont,y_cont=filterout_peaks(x,y,mode="both")
@@ -1114,7 +1119,7 @@ def EW_point_sources(cube, sources, wave, na_rest,plots=False):
 
 
 
-        v=1000
+        v=600
         bound1=na_rest*(1-v/(3*10**5))
 
         bound2=na_rest*(1+v/(3*10**5))
@@ -1128,8 +1133,8 @@ def EW_point_sources(cube, sources, wave, na_rest,plots=False):
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
-            plt.plot(x,y,label="integral")
-            plt.plot(x_chopped,y_chopped,label="spectra")
+            plt.plot(x,excess_intensity,label="integral")
+            #plt.plot(x_chopped,y_chopped,label="spectra")
             plt.show()
         # Integrate the excess intensity (area over the continuum)
         area_over_continuum = trapz(excess_intensity, x)
@@ -1230,3 +1235,40 @@ def generate_spectra(model,stars_data,figures=False):
         spectra.append([x,y])
 
     return spectra
+
+
+def compute_ebv_gas(Ha_flux, Hb_flux, law='calzetti'):
+    """
+    Calculate E(B-V) for the ionized gas using the Balmer decrement.
+
+    Parameters:
+    - Ha_flux: Observed H-alpha flux
+    - Hb_flux: Observed H-beta flux
+    - law: 'calzetti' or 'cardelli'
+
+    Returns:
+    - E(B-V) value (float)
+    """
+    # Intrinsic ratio from case B recombination
+    intrinsic_ratio = 2.86
+
+    # Extinction coefficients
+    if law == 'calzetti':
+        k_Ha = 3.33
+        k_Hb = 4.60
+    elif law == 'cardelli':
+        k_Ha = 2.535
+        k_Hb = 3.609
+    else:
+        raise ValueError("Choose 'calzetti' or 'cardelli' for extinction law")
+
+    # Observed ratio
+    observed_ratio = Ha_flux / Hb_flux
+
+    # Avoid log of negative or zero
+    if observed_ratio <= intrinsic_ratio:
+        return 0.0
+
+    # Compute E(B-V)
+    ebv = (2.5 / (k_Hb - k_Ha)) * np.log10(observed_ratio / intrinsic_ratio)
+    return ebv
