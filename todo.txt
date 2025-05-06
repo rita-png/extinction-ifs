@@ -1,0 +1,31 @@
+todo hoje:
+
+1- EW da MW em zonas do bulge da galaxia ou estrelas da galaxia, ou braços
+
+devia ser = p toda a galaxia
+
+2 - usar circular aperture 
+3 - ver como binning afeta
+
+4 - fazer plot de EW for differetn sources (como fiz antes p estrelas da MW) a ver se estao within error bars.
+
+
+
+5- do voronoi binning!
+
+include integration window error,
+is it emission or absorption line?
+
+
+outros:
+irs, david hilditch, capa telemovel, planear aniversario, fazer contas
+
+
+tenis altra, poi balls
+
+
+
+
+
+
+

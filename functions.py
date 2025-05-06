@@ -36,7 +36,9 @@ def plot_image(image, wavelengths, index, colormap,title=''):
         plt.imshow(image,cmap=colormap,origin='lower',clim=(lo,up))
         plt.colorbar(orientation="horizontal")
         if title=='':
-            plt.title("$\lambda = $"+str(round(wavelengths,2))+" $\AA$",fontsize=18)
+            #plt.title("$\lambda = $"+str(round(wavelengths,2))+" $\AA$",fontsize=18)
+            plt.title(r"$\lambda = $" + str(round(wavelengths, 2)) + r" $\AA$", fontsize=18)
+
         else:
             plt.title(title,fontsize=18)
         plt.xlabel('xpix')
@@ -55,7 +57,7 @@ def plot_image(image, wavelengths, index, colormap,title=''):
             lo,up = np.nanpercentile(image[i],2),np.nanpercentile(image[i],98)
             im=axes[i].imshow(image[i], cmap=colormap,origin='lower',clim=(lo,up))
             axes[i].axis('off')
-            axes[i].set_title("$\lambda = $"+str(round(wavelengths[i],2))+" $\AA$",fontsize=18)
+            axes[i].set_title(r"$\lambda = $"+str(round(wavelengths[i],2))+r" $\AA$",fontsize=18)
             
             axes[i].set_xlabel('xpix')
             axes[i].set_ylabel('ypix')
@@ -88,7 +90,7 @@ def plot_images(images, wavelengths, colormap='viridis', titles=None):
         if titles and i < len(titles):
             axes[i].set_title(titles[i], fontsize=14)
         else:
-            axes[i].set_title(f"$\lambda = {round(wavelengths[i],2)} \AA$", fontsize=14)
+            axes[i].set_title(r"$\lambda = {round(wavelengths[i],2)} \AA$", fontsize=14)
 
         # Add colorbar
         fig.colorbar(im, ax=axes[i], orientation="horizontal", fraction=0.046, pad=0.04)
@@ -250,9 +252,11 @@ def circular_aperture(cube, x_center, y_center, radius):
     pixels = []
     stacked_spectrum = np.zeros(cube.shape[0])  # initialize 1D spectrum array
 
+    area=0
     for dx in range(-r, r + 1):
         for dy in range(-r, r + 1):
             if dx**2 + dy**2 <= radius**2:
+                area+=1
                 x = int(x_center + dx)
                 y = int(y_center + dy)
 
@@ -260,7 +264,9 @@ def circular_aperture(cube, x_center, y_center, radius):
                 if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
                     pixels.append((x, y))
                     stacked_spectrum += cube[:, y, x]  # note: y is row, x is column
-
+    
+    stacked_spectrum=stacked_spectrum/area
+    
     return stacked_spectrum#, pixels
 
 
@@ -812,7 +818,7 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
             excess_intensity = (continuum-y)/continuum
 
             # Integrate the excess intensity (area over the continuum)
-            #area_over_continuum = trapz(excess_intensity, x)
+            #area_over_continuum = trapezoid(excess_intensity, x)
             
             # Interpolating before integrating, so that we have more points
             
@@ -823,7 +829,7 @@ def EW_map_non_parametric(cube_region,wave,central_wavelength,mode,kernel_size=3
             
 
             # Integrate the excess intensity (area over the continuum)
-            area_over_continuum = trapz(excess_intensity, xx)
+            area_over_continuum = trapezoid(excess_intensity, xx)
 
 
             # EW error computation
@@ -1137,7 +1143,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
             #plt.plot(x_chopped,y_chopped,label="spectra")
             plt.show()
         # Integrate the excess intensity (area over the continuum)
-        area_over_continuum = trapz(excess_intensity, x)
+        area_over_continuum = trapezoid(excess_intensity, x)
         #continuum_summed = simps(continuum_fit(x), x)
 
         # Compute uncertainty
@@ -1193,7 +1199,7 @@ def EW_theoretical_spectra(wavelength,flux, na_rest,plots=False):
         plt.plot(x,excess_intensity)
         plt.show()
     # Integrate the excess intensity (area over the continuum)
-    area_over_continuum = trapz(excess_intensity, x)
+    area_over_continuum = trapezoid(excess_intensity, x)
     #continuum_summed = simps(continuum_fit(x), x)
 
     # Compute uncertainty
