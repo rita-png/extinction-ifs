@@ -5,7 +5,7 @@ from scipy.fft import fft, ifft
 from PIL import Image
 from scipy.optimize import curve_fit
 from scipy.signal import convolve
-from scipy.integrate import trapz
+from scipy.integrate import trapezoid
 from scipy.interpolate import interp1d
 from vorbin.voronoi_2d_binning import voronoi_2d_binning
 from scipy.ndimage import convolve1d
@@ -123,7 +123,7 @@ def stack_all(data):
     
     image_stack = np.array(data)
     
-    return np.sum(image_stack, axis=0)
+    return np.sum(image_stack, axis=0)/len(image_stack)
 
 def stack(data,wave,number_images,central_wavelength):
     
@@ -266,7 +266,7 @@ def circular_aperture(cube, x_center, y_center, radius):
                     stacked_spectrum += cube[:, y, x]  # note: y is row, x is column
     
     stacked_spectrum=stacked_spectrum/area
-    
+    print("AREA",area)
     return stacked_spectrum#, pixels
 
 
@@ -1104,9 +1104,11 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         y_pos=sources[i][1]
         x_pos=sources[i][0]
 
+        #print("x pos = ", x_pos," y_pos = ", y_pos)
+
         #data=cube[:,y_pos,x_pos]
         data=circular_aperture(cube,x_pos, y_pos, radius)#new
-
+        
 
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
@@ -1123,7 +1125,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         cont = convolve1d(y_cont, kernel, mode='nearest')
         interp=interp1d(x_cont, cont, kind='cubic')
 
-
+        print("HOLA, ", y)
 
         v=600
         bound1=na_rest*(1-v/(3*10**5))
@@ -1139,8 +1141,12 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
+            
+            plt.plot(x_chopped,y_chopped, label="Circular aperture spec.")
             plt.plot(x,excess_intensity,label="integral")
-            #plt.plot(x_chopped,y_chopped,label="spectra")
+            plt.plot(x,cont,label="continuum")
+            plt.plot(x,y,color="red",label="flux")
+            plt.legend()
             plt.show()
         # Integrate the excess intensity (area over the continuum)
         area_over_continuum = trapezoid(excess_intensity, x)

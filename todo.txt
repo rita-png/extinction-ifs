@@ -13,8 +13,12 @@ devia ser = p toda a galaxia
 
 5- do voronoi binning!
 
+
 include integration window error,
 is it emission or absorption line?
+
+
+6- also calculate the ew for a background point
 
 
 outros:
@@ -24,6 +28,10 @@ irs, david hilditch, capa telemovel, planear aniversario, fazer contas
 tenis altra, poi balls
 
 
+
+
+NOW: EW_point_sources plots change
+verify magnitudes of fluxes on differetn plots
 
 
 
