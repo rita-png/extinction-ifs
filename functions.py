@@ -1113,7 +1113,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
 
-        y_smooth=smooth_spectra(y_chopped,kernel_size=3)
+        y_smooth=smooth_spectra(y_chopped,kernel_size=6)
         # continuum
         x,y=x_chopped,y_smooth
         x_cont,y_cont=filterout_peaks(x,y,mode="both")
@@ -1125,7 +1125,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         cont = convolve1d(y_cont, kernel, mode='nearest')
         interp=interp1d(x_cont, cont, kind='cubic')
 
-        print("HOLA, ", y)
+        
 
         v=600
         bound1=na_rest*(1-v/(3*10**5))
@@ -1141,9 +1141,12 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
-            
-            plt.plot(x_chopped,y_chopped, label="Circular aperture spec.")
-            plt.plot(x,excess_intensity,label="integral")
+            plt.figure(figsize=(10, 8))
+            plt.plot(x_chopped,y_smooth, label="Circular aperture spec.")
+
+            plt.fill_between(x, (cont-y)/cont, 0, alpha=0.3, color="green", label="Excess area")
+            #plt.plot(x,excess_intensity,label="integral")
+            plt.plot(x,cont-y,label="cont-y")
             plt.plot(x,cont,label="continuum")
             plt.plot(x,y,color="red",label="flux")
             plt.legend()
