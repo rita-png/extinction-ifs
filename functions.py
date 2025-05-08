@@ -1096,9 +1096,10 @@ def gaia_parameters(matched_ras,matched_decs):
         print(" ")
     return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
-def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
+def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     EW_array=[]
     EW_err_array=[]
+    SNR_array=[]
     for i in range(0,len(sources)):
         
         y_pos=sources[i][1]
@@ -1127,7 +1128,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
 
         
 
-        v=600
+        #v=600#
         bound1=na_rest*(1-v/(3*10**5))
 
         bound2=na_rest*(1+v/(3*10**5))
@@ -1147,7 +1148,8 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
             plt.fill_between(x, (cont-y)/cont, 0, alpha=0.3, color="green", label="Excess area")
             #plt.plot(x,excess_intensity,label="integral")
             plt.plot(x,cont-y,label="cont-y")
-            plt.plot(x,cont,label="continuum")
+            #plt.plot(x,cont,label="continuum")
+            plt.plot(x_cont,interp(x_cont),label="continuum")
             plt.plot(x,y,color="red",label="flux")
             plt.legend()
             plt.show()
@@ -1162,11 +1164,17 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,plots=False):
 
         #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
         #err=np.sqrt(noise)
+        SNR=np.nanmedian(y/mad(y))
 
         print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
+        print("SNR is ",SNR)
+
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
-    return EW_array, EW_err_array
+        SNR_array.append(SNR)
+
+
+    return EW_array, EW_err_array, np.array(SNR_array)
 
 
 
