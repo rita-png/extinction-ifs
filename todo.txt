@@ -1,13 +1,22 @@
-todo hoje:
+travel form, voronoi, sascha
 
-1- EW da MW em zonas do bulge da galaxia ou estrelas da galaxia, ou braços
 
-devia ser = p toda a galaxia
 
-2 - usar circular aperture 
-3 - ver como binning afeta
 
-4 - fazer plot de EW for differetn sources (como fiz antes p estrelas da MW) a ver se estao within error bars.
+
+nada disto é pessoal, sao só provas da confusao mental dele.
+não signifca que ele não seja a pessoa certa para mim, signifca que ele *neste momento* não é capaz de estar lá para mim, de show up for me. e saber que ele nao está pronto agora, neste
+momento, é tudo o que eu preciso de saber.
+o bom disto tudo foi que senti o centro em mim, que me senti valorizada pelos meus amigos, as atençoes em mim, o valor foi-me dado (apesar de não por ele)
+
+
+
+marcar viagens chile, aplicar pelicula, msg krinio
+
+
+
+
+comprar anos: camara analogica, filtro agua
 
 
 
@@ -15,17 +24,15 @@ devia ser = p toda a galaxia
 
 
 include integration window error,
-is it emission or absorption line?
 
 
-6- also calculate the ew for a background point
 
 
 outros:
-irs, david hilditch, capa telemovel, planear aniversario, fazer contas
+irs, david hilditch, capa telemovel, planear aniversario, fazer contas, reembolso summer school
 
 
-tenis altra, poi balls
+meus anos: tenis altra,corda escalada, lifeline, hidration belt
 
 
 
@@ -33,21 +40,24 @@ pedir novo cartao ist
 
 
 ______________________________
-risco ecra, marcar restaurante anso
+risco ecra
 
 
-comprar tenis e bike e poiballs
+comprar tenis e bike
 marcar eduardo cardoso pires
-testar projetor
+
+contas mês!!
 
 
 
 
----- conversation:
-i think it will be hard to find a place soon, because they will wnat people that stay longterm,
+re-do 3d fit
+what to do with the two patches fit? they are better but i would have to go thorhgh the 3d fit again. pierre thinks appendices.
+pierre thinks its strange to put two patches as main recsult for spins and not for energy
+structure?
+plots: whole surface for two patches, zoom in high spins. 1d plot at q=1 of the two patches fit
+include two patches in main text
 
-do you have any suggestion of how we can sort this?
-how long can i stay in the ESO house? ((((if i could stay there for a month, i would sort out 2 week in an airbnb))))
-websites where i can look for places to stay?
-i am going to the summer school online in the first week of june
-will email them asking for the trip in about one month, so i can have time to sort out the accomodation
+energy fits, two patches!
+deos energy work without eq 5.3?
+going directly for the two patches? for energy: witout root for small spins, root for high spins
