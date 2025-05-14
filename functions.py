@@ -346,12 +346,13 @@ def voronoi(flux_map,noise_values,pixel_size=0.2,target_snr=20,plots=False,text=
 
 
 
-def apply_voronoi_to_cube(muse_cube, voronoi_bins):
+def apply_voronoi_to_cube(muse_cube, muse_cube_err, voronoi_bins):
     n_wave, ny, nx = muse_cube.shape
     n_bins = int(np.nanmax(voronoi_bins)) + 1  # Bin indices go from 0 to n_bins-1
 
     # Prepare output array: one spectrum per bin
     binned_spectra = np.zeros((n_bins, n_wave))
+    binned_error = np.zeros((n_bins, n_wave))
 
     for bin_idx in range(n_bins):
         # Create mask for current bin
@@ -360,11 +361,13 @@ def apply_voronoi_to_cube(muse_cube, voronoi_bins):
         # Apply mask to each wavelength slice
         # bin_pixels will have shape (n_wave, N_pixels_in_bin)
         bin_pixels = muse_cube[:, bin_mask]
+        bin_pixels_err = muse_cube_err[:, bin_mask]
 
         # Take the median (or mean) across the spatial pixels for each wavelength
         binned_spectra[bin_idx] = np.nanmedian(bin_pixels, axis=1)
+        binned_error[bin_idx] = np.nanmedian(bin_pixels_err, axis=1)
 
-    return binned_spectra  # Shape: [n_bins, n_wave]
+    return binned_spectra,binned_error  # Shape: [n_bins, n_wave]
 
 
 """def apply_voronoi_to_cube(muse_cube, voronoi_bins):
@@ -1205,6 +1208,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
         #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
         #err=np.sqrt(noise)
         SNR=np.nanmedian(y/mad(y))
+        print("WARNING: in line above I need to use MUSE errors")
 
         print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
         print("SNR is ",SNR)
@@ -1217,7 +1221,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     return EW_array, EW_err_array, np.array(SNR_array)
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, na_rest,plots=True):
+def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1225,11 +1229,10 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,plots=True):
         
         
         data=spectra_per_bin[i,:]
-        
-        
-
+        errors=errors_per_bin[i,:]
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
+        yerr=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
 
         y_smooth=smooth_spectra(y_chopped,kernel_size=6)
         # continuum
@@ -1247,15 +1250,21 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,plots=True):
 
         #v=600#
         bound1=na_rest*(1-v/(3*10**5))
-
         bound2=na_rest*(1+v/(3*10**5))
+
+        yerrMUSE=chop_data(x,yerr,bound1,bound2)[1]
+        
+        
         x,y=chop_data(x,y,bound1,bound2)
+        
 
         cont = interp(x)
 
         # Compute the excess intensity above the continuum
         excess_intensity = (cont-y)/cont
         err_f=mad(y)
+
+        #aqui^
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
@@ -1281,7 +1290,9 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,plots=True):
 
         #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
         #err=np.sqrt(noise)
-        SNR=np.nanmedian(y/mad(y))
+        
+        SNR=np.nanmedian(y/yerrMUSE)
+        #np.nanmedian(y/mad(y))
 
         print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
         print("SNR is ",SNR)
