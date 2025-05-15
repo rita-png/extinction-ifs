@@ -749,7 +749,7 @@ def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
     sigma_g=[]
 
     for i in range(0,len(cont)):
-        sigma_g.append(np.sqrt((sigma_f/cont[i])**2 + (g[i]* sigma_c / cont[i])**2))
+        sigma_g.append(np.sqrt((sigma_f[i]/cont[i])**2 + (g[i]* sigma_c / cont[i])**2))
         
     sum=0
 
@@ -1262,7 +1262,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
 
         # Compute the excess intensity above the continuum
         excess_intensity = (cont-y)/cont
-        err_f=mad(y)
+        #err_f=mad(y)
+        err_f=yerr
 
         #aqui^
         g = interp1d(x, excess_intensity, kind='cubic')
