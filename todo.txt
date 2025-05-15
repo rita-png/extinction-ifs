@@ -1,4 +1,4 @@
-travel form, voronoi, sascha
+travel form, sascha
 
 
 
@@ -7,6 +7,9 @@ michael sai a 12
 
 opções: eu ir a 14 (sabado) e chegar a 15
 eu ir a 10 (terça) e chegar a 11
+
+
+ir a 9/10 junho
 
 
 
@@ -29,7 +32,7 @@ include integration window error,
 
 
 outros:
-irs, david hilditch, capa telemovel, planear aniversario, fazer contas, reembolso summer school
+irs, david hilditch, planear aniversario, fazer contas, reembolso summer school
 
 
 meus anos: tenis altra, lifeline
