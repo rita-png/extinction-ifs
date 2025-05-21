@@ -342,7 +342,7 @@ def voronoi(flux_map,noise_values,pixel_size=0.2,target_snr=20,plots=False,text=
     binned_data = binned_data.reshape(ny,nx)
     bin_index_map = bin_num.reshape(ny, nx)
 
-    return binned_data, bin_index_map
+    return binned_data, bin_index_map, sn_bin
 
 
 
@@ -369,24 +369,6 @@ def apply_voronoi_to_cube(muse_cube, muse_cube_err, voronoi_bins):
 
     return binned_spectra,binned_error  # Shape: [n_bins, n_wave]
 
-
-"""def apply_voronoi_to_cube(muse_cube, voronoi_bins):
-    n_wave, ny, nx = muse_cube.shape
-    valid_bins = np.unique(voronoi_bins[~np.isnan(voronoi_bins)]).astype(int)
-
-    binned_spectra = np.zeros((len(valid_bins), n_wave))
-
-    for i, bin_idx in enumerate(valid_bins):
-        bin_mask = voronoi_bins == bin_idx
-        bin_pixels = muse_cube[:, bin_mask]
-
-        if bin_pixels.shape[1] > 0:  # make sure it has pixels
-            binned_spectra[i] = np.nanmedian(bin_pixels, axis=1)
-        else:
-            binned_spectra[i] = np.full(n_wave, np.nan)  # fill with NaNs if no data
-
-    return binned_spectra, valid_bins  # Optionally return the actual bin numbers
-"""
 
 ## fitting ##
 
@@ -576,7 +558,7 @@ def continuum_line(x,y,mode="both"):
     return filtered_x, filtered_y"""
 
 
-def filterout_peaks(x, y, mode="peaks", low=30, high=70):
+"""def filterout_peaks(x, y, mode="peaks", low=30, high=70):
     
     Q1 = np.percentile(y, low)
     Q3 = np.percentile(y, high)
@@ -594,7 +576,31 @@ def filterout_peaks(x, y, mode="peaks", low=30, high=70):
     filtered_x = x[mask]
     filtered_y = y[mask]
 
+    return filtered_x, filtered_y"""
+
+def filterout_peaks(x, y, mode="peaks", low=30, high=70, errors=None):
+    Q1 = np.percentile(y, low)
+    Q3 = np.percentile(y, high)
+    IQR = Q3 - Q1
+    upper_threshold = Q3 + 1.5 * IQR  # Threshold for peaks
+    lower_threshold = Q1 - 1.5 * IQR  # Threshold for dips
+
+    if mode == "peaks":
+        mask = y < upper_threshold  # Remove peaks
+    elif mode == "dips":
+        mask = y > lower_threshold  # Remove dips
+    else:  # mode == "both"
+        mask = (y > lower_threshold) & (y < upper_threshold)  # Remove both peaks and dips
+
+    filtered_x = x[mask]
+    filtered_y = y[mask]
+
+    if errors is not None:
+        filtered_errors = errors[mask]
+        return filtered_x, filtered_y, filtered_errors
+
     return filtered_x, filtered_y
+
 
 ## EW ##
 
@@ -1232,15 +1238,18 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         errors=errors_per_bin[i,:]
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
-        yerr=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
+        yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
 
+        
         y_smooth=smooth_spectra(y_chopped,kernel_size=6)
         # continuum
         x,y=x_chopped,y_smooth
-        x_cont,y_cont=filterout_peaks(x,y,mode="both")
+        x_cont,y_cont,SNR_err=filterout_peaks(x,y,"both",errors=yerrMUSE)
 
-        noise = mad(y_cont)
+        # SNR estimate        
+        SNR=np.nanmedian(y_cont/SNR_err)
 
+        
         kernel_size=60
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
@@ -1252,7 +1261,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         bound1=na_rest*(1-v/(3*10**5))
         bound2=na_rest*(1+v/(3*10**5))
 
-        yerrMUSE=chop_data(x,yerr,bound1,bound2)[1]
+        
         
         
         x,y=chop_data(x,y,bound1,bound2)
@@ -1263,9 +1272,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         # Compute the excess intensity above the continuum
         excess_intensity = (cont-y)/cont
         #err_f=mad(y)
-        err_f=yerr
+        err_f=yerrMUSE
 
-        #aqui^
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
@@ -1289,13 +1297,15 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         err_cont=mad(interp(x))
         err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
 
+        #noise = mad(y_cont)
         #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
         #err=np.sqrt(noise)
         
-        SNR=np.nanmedian(y/yerrMUSE)
+
+        
         #np.nanmedian(y/mad(y))
 
-        print(f"EW= {area_over_continuum:.2f}"," +/- ", err)
+        print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
         print("SNR is ",SNR)
 
         EW_array.append(area_over_continuum)
