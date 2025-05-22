@@ -1227,7 +1227,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     return EW_array, EW_err_array, np.array(SNR_array)
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True):
+def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True,KS=60):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1236,6 +1236,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         
         data=spectra_per_bin[i,:]
         errors=errors_per_bin[i,:]
+        
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
         yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
@@ -1250,7 +1251,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         SNR=np.nanmedian(y_cont/SNR_err)
 
         
-        kernel_size=60
+        kernel_size=KS
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
         interp=interp1d(x_cont, cont, kind='cubic')
@@ -1262,9 +1263,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         bound2=na_rest*(1+v/(3*10**5))
 
         
-        
-        
-        x,y=chop_data(x,y,bound1,bound2)
+        x,y,erro=chop_data(x,y,bound1,bound2,yerrMUSE)
         
 
         cont = interp(x)
@@ -1307,6 +1306,10 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
 
         print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
         print("SNR is ",SNR)
+
+        
+        print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
+        print( np.max(cont-y),erro[np.argmax(cont-y)])
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
