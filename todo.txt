@@ -1,26 +1,189 @@
+
+plot EW em funcao da kernel size
+
+
+Before this, I had to chagne my continuum errors estimate. Before I was using the mean absolute deviation, but now I do the same procedure of Santiago's paper with Cláudia --- compute the continuum with a base resolution (a given kernel size), and then with 25% more points, as well as with 25% less points. Then I take 
+i do this study by inputting the errors from muse. the goal is, after fixing what the optimal kernel size, fix it 
+imagens das diferences SNR para diferentes kernel sizes
+
+
+
+
+I think this is a choice that will be case-dependent (whether we want to measure the EW of the host or of the MW, for instance)
+
+
+msg santiago
+(done) mail ana mourao
+mail pedro ribeiro
+ramuch
+mails todos
+farmacia
+irs
+investir
+
+
+
+
+calendário:
+
+iceclimbing com andes.chile 28 julho 150 luca
+6julho @capitaltravel_cl iceclimbing
+
+el pintor invernal 60 luca 19 julio @hikecamp.cl
+
+
+----
+
+
+
+urgent to do
+
+
+inscrever ice climbing
+
+
+hoje sem falta:
+
+esim refund, recebi reembolso summer school?, casaco patagonia, botas
+
+
+
+
+ler slides day 5
+
+acabr de ler este artigo time evol
+
+
+10.5 eur por 30 dias https://www.civitatis.com/pt/chip-esim-chile/#detalhes
+6 semanas, 15 USD https://www.airalo.com/es-419/chile-esim
+preço igual https://esimpilot.com/esim-chile
+
+
+2h 64 eur https://laparva.cl/escuela-de-esqui/
+70 eur 2h30 mini escuela
+
+2h 57 eur https://www.elcolorado.cl/escuelaski/#collapse-02
+
+1h30 45 eur https://skiportillo.com/escuela-de-esqui/clases-de-esqui-grupales/
+
+1h55 56 eur https://www.vallenevado.com/es/montana/servicios-invierno/escuela-de-ski-y-snowboard/
+
+
+hoje:
+
+sim card
+
+refeiçoes tortilla?,medalhoes pescada, seitan à alentejana, tofu https://minimalistbaker.com/almond-butter-tofu-stir-fry/
+quiche
+
+
+
+mail lab de astro cadeira
+
+
+
+watch lectures
+ler papers
+
+
+4.2 spatial things, think i will skip
+4.4 watching now
+
+5.1 gaussian process regression THIS3
+5.2 neural networks THIS1
+5.3.1 deep learning THIS2
+5.3.2
+5.4
+
+
+fazer contas €
+
+irs
+
+
+
+
+
+
+
+
+see if from amusing sample https://htmlpreview.github.io/?https://github.com/amusing-muse/Characterization/blob/master/centers.html
+some of the SNe also are in the sample that is in the observing proposal page 6 of file:///home/rita13santos/Downloads/AMUSING_P97.pdf
+
+maguire and philips have high resolution spectra of SN. cross check with the ones in AMUSING and of last proposal
+
+
+por no CV observacoes pessto e estadia eso chile
+
+
+
+
+
+
 hoje:
 
 
-remarcar clinica pelo
+day2,4 feigelson
+day 3 nested sampling
+day 3 feigelson
+day 4,5 tudo
 
-marcar dentista
-MARCAR LYRA
-journal club prox semana
+
+
+confirmar taxis todos
+
+
+BALTASAR??????????????
+postal do chile
+
+MAIL TAXI chile!!!!!!!!!!!!!!!!!
+sascha responder
+ENTREgAR irs
+DAVID HILDITCH TEAMS
+
+
+por summer scholl e R no curriculo,talk in ligo colaboration meeting
+
+
+risco ecra
+
+
+CONTAS DESDE JANEIRO E investir
+
+reembolso ecografia pela ADSE
+
+contas de janeiro e fevereiro
+camara analogica
+
+encomendar fones
+
+laser chile,
+investir,
+comprar lona corda escalada
+
+
+
+
+
+
+
+como ativar seguro da FCT?
+
+
+
+
+
+
+
+outdoors chile e corridas
+
+
+
 luva
-buscar analises HFF
 
-
-segunda feira: 10h30 all in one
-18h30 static trapeza
-20h rope ou sling
-
-jaya 6a
-encomenda mango
-marcar eduardo cardoso pires
 risco ecra
 contas mês
 limpar gmail
-certificado aforro preparar
 foto cartao ist
 
 
@@ -30,10 +193,7 @@ foto cartao ist
 
 
 
-
-
-aplicar pelicula
-
+programa milhas latam
 
 
 

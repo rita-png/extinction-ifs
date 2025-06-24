@@ -123,7 +123,7 @@ def stack_all(data):
     
     image_stack = np.array(data)
     
-    return np.sum(image_stack, axis=0)/len(image_stack)
+    return np.median(image_stack, axis=0)#return np.sum(image_stack, axis=0)/len(image_stack)
 
 def stack(data,wave,number_images,central_wavelength):
     
@@ -219,7 +219,7 @@ def avg_spectra_of_region(data,z=0):
     return spec_avg
 
 def median_spectra_of_region(data, z=0):
-    spec_median = np.median(data, axis=(1, 2))
+    spec_median = np.nanmedian(data, axis=(1, 2))
     return spec_median
 
 
@@ -269,6 +269,30 @@ def circular_aperture(cube, x_center, y_center, radius):
     print("AREA",area)
     return stacked_spectrum#, pixels
 
+
+def circular_aperture_median(cube, x_center, y_center, radius):
+    r = int(np.ceil(radius))
+    spectra_list = []
+
+    area = 0
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx**2 + dy**2 <= radius**2:
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+
+                # Check bounds
+                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
+                    area += 1
+                    spectra_list.append(cube[:, y, x])
+
+    if area == 0:
+        raise ValueError("No pixels found within the aperture")
+
+    spectra_stack = np.stack(spectra_list, axis=0)  # shape: (area, wavelengths)
+    median_spectrum = np.median(spectra_stack, axis=0)
+    print("AREA", area)
+    return median_spectrum
 
 ## binning ##
 
@@ -481,9 +505,9 @@ def average_duplicate_wavelengths(wavelength, flux):
 
 ## cosine kernel ##
 
-def cosine_kernel(size):
+def cosine_kernel(size): #argumento espaço velocidade e não lambda
     x = np.linspace(-np.pi, np.pi, size)
-    kernel = (1 + np.cos(x))/2  
+    kernel = (1 + np.cos(x))/2 #np.cos(x)
     return kernel / np.sum(kernel)
 
 ## smoothing the spectra ##
@@ -746,8 +770,28 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,fit="Halpha",central
     
     
 
-
 def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
+
+    #g==(c-y)/c
+    #computing sigma_g
+    
+    sigma_g=[]
+
+    for i in range(0,len(cont)):
+        sigma_g.append(np.sqrt((sigma_f/cont[i])**2 + (g[i]* sigma_c[i] / cont[i])**2))
+        
+    sum=0
+
+    for i in range(0,len(sigma_g)-1):
+        sum += (Delta/2)**2 * (sigma_g[i]**2 + sigma_g[i+1]**2)
+
+    noise= mad(cont)
+    err_integral = np.sqrt(sum)
+
+    return err_integral
+
+#old function that used one sigma_c value for all spectra point (interp(x)))
+"""def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
 
     #g==(c-y)/c
     #computing sigma_g
@@ -765,7 +809,7 @@ def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
     noise= mad(cont)
     err_integral = np.sqrt(sum)
 
-    return err_integral
+    return err_integral"""
 
 ## Maps ##
 #parametric#
@@ -1154,9 +1198,6 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
         y_pos=sources[i][1]
         x_pos=sources[i][0]
 
-        #print("x pos = ", x_pos," y_pos = ", y_pos)
-
-        #data=cube[:,y_pos,x_pos]
         data=circular_aperture(cube,x_pos, y_pos, radius)
         
 
@@ -1221,13 +1262,13 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
-        SNR_array.append(SNR)
+        #SNR_array.append(SNR)
 
 
-    return EW_array, EW_err_array, np.array(SNR_array)
+    return EW_array, EW_err_array#, np.array(SNR_array)
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True,KS=60):
+def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True,KS=60):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1235,20 +1276,20 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         
         
         data=spectra_per_bin[i,:]
-        errors=errors_per_bin[i,:]
+        #errors=errors_per_bin[i,:] #no inputted MUSE errors anymore
         
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
-        yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
+        #yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
 
         
-        y_smooth=smooth_spectra(y_chopped,kernel_size=6)
+        y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
         # continuum
-        x,y=x_chopped,y_smooth
-        x_cont,y_cont,SNR_err=filterout_peaks(x,y,"both",errors=yerrMUSE)
+        x,y=x_chopped,y_chopped#y_smooth
+        x_cont,y_cont=filterout_peaks(x,y,"both")
 
         # SNR estimate        
-        SNR=np.nanmedian(y_cont/SNR_err)
+        #SNR=np.nanmedian(y_cont/SNR_err)
 
         
         kernel_size=KS
@@ -1256,35 +1297,61 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         cont = convolve1d(y_cont, kernel, mode='nearest')
         interp=interp1d(x_cont, cont, kind='cubic')
 
+        # estimating flux errors
         
+        yerrMUSE=0
+        for i in range(len(y_cont)):
+            yerrMUSE+=(y_cont[i]-interp(x_cont[i]))**2
+            yerrMUSE=np.sqrt(yerrMUSE)
+        print("New error of flux is ", yerrMUSE)
 
         #v=600#
         bound1=na_rest*(1-v/(3*10**5))
         bound2=na_rest*(1+v/(3*10**5))
 
         
-        x,y,erro=chop_data(x,y,bound1,bound2,yerrMUSE)
+
+
+        x,y=chop_data(x,y,bound1,bound2)
         
 
         cont = interp(x)
 
+
+        # estimating continuum error
+        cont1 = convolve1d(y_cont, cosine_kernel(int(kernel_size*1.25)), mode='nearest')
+        auxcont1=interp1d(x_cont, cont1, kind='cubic')
+
+        cont2 = convolve1d(y_cont, cosine_kernel(int(kernel_size*0.75)), mode='nearest')
+        auxcont2=interp1d(x_cont, cont2, kind='cubic')
+
+        err_cont=[]
+        for i in range(len(x)):
+            c_avg = (cont[i]+auxcont1(x[i])+auxcont2(x[i]))/3
+            std_dev=np.sqrt((cont[i]-c_avg)**2+(auxcont1(x[i])-c_avg)**2+(auxcont2(x[i])-c_avg)**2)
+            err_cont.append(std_dev)
+
+        ##
+
+
         # Compute the excess intensity above the continuum
         excess_intensity = (cont-y)/cont
-        #err_f=mad(y)
+        
         err_f=yerrMUSE
 
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
             plt.figure(figsize=(10, 8))
-            plt.plot(x_chopped,y_smooth, label="Circular aperture spec.")
+            plt.plot(x_chopped,y_chopped, label="Flux")
 
-            plt.fill_between(x, (cont-y)/cont, 0, alpha=0.3, color="green", label="Excess area")
-            #plt.plot(x,excess_intensity,label="integral")
-            plt.plot(x,cont-y,label="cont-y")
-            #plt.plot(x,cont,label="continuum")
-            plt.plot(x_cont,interp(x_cont),label="continuum")
-            plt.plot(x,y,color="red",label="flux")
+            plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
+
+            #plt.plot(x,cont-y,label="cont-y")
+            plt.plot(x_cont,interp(x_cont),label="Continuum")
+            plt.ylabel("Flux", fontsize=14)
+            plt.xlabel(r"Wavelength  ($\AA$)", fontsize=14)
+            plt.plot(x,y,color="red",label="Integral Area")
             plt.legend()
             plt.show()
         # Integrate the excess intensity (area over the continuum)
@@ -1293,7 +1360,10 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
 
         # Compute uncertainty
 
-        err_cont=mad(interp(x))
+        #err_cont=mad(interp(x))
+
+        """print("eer_cont before", mad(interp(x)))
+        print("eer_cont after", err_cont)"""
         err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
 
         #noise = mad(y_cont)
@@ -1305,18 +1375,18 @@ def EW_voronoi_bins(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=T
         #np.nanmedian(y/mad(y))
 
         print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
-        print("SNR is ",SNR)
+        #print("SNR of the spectra (excluding the line) is ",SNR)
 
         
-        print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
-        print( np.max(cont-y),erro[np.argmax(cont-y)])
+        #print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
+        print("SNR of the line is ", area_over_continuum/err)
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
-        SNR_array.append(SNR)
+        #SNR_array.append(SNR)
 
 
-    return EW_array, EW_err_array, np.array(SNR_array)
+    return EW_array, EW_err_array#, np.array(SNR_array)
 
 
 
