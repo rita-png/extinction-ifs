@@ -510,6 +510,11 @@ def cosine_kernel(size): #argumento espaço velocidade e não lambda
     kernel = (1 + np.cos(x))/2 #np.cos(x)
     return kernel / np.sum(kernel)
 
+"""def cosine_kernel(nodeseparation):
+    #nodeseparation=2*np.pi/size
+    x = np.arange(-np.pi, np.pi, nodeseparation)
+    kernel = (1 + np.cos(x))/2
+    return kernel / np.sum(kernel)"""
 ## smoothing the spectra ##
 
 def smooth_spectra(y,kernel_size):
@@ -1272,6 +1277,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
+    average_separation_array=[]
+
     for i in range(0,len(spectra_per_bin)):
         
         
@@ -1283,10 +1290,17 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         #yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
 
         
-        y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
+        #y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
         # continuum
         x,y=x_chopped,y_chopped#y_smooth
-        x_cont,y_cont=filterout_peaks(x,y,"both")
+        x_cont,y_cont=filterout_peaks(x,y,low=33, high=60,mode="both")#30,70
+
+        #average separation in x
+        """diffs = np.diff(x_cont)
+        average_separation = np.mean(diffs)
+        print("average sep is ", average_separation)"""
+        average_separation=(np.max(x_cont)-np.min(x_cont))/KS #this is delta_lambda
+        average_separation=(3*10**5)*average_separation/na_rest#converting delta_lambda to delva_v (in km/s)
 
         # SNR estimate        
         #SNR=np.nanmedian(y_cont/SNR_err)
@@ -1295,15 +1309,17 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         kernel_size=KS
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
-        interp=interp1d(x_cont, cont, kind='cubic')
-
-        # estimating flux errors
         
+        
+        interp=interp1d(x_cont, cont, kind='cubic')
+        
+
+        # estimating flux errors like in Santiago's paper
         yerrMUSE=0
         for i in range(len(y_cont)):
             yerrMUSE+=(y_cont[i]-interp(x_cont[i]))**2
             yerrMUSE=np.sqrt(yerrMUSE)
-        print("New error of flux is ", yerrMUSE)
+        #print("New error of flux is ", yerrMUSE)
 
         #v=600#
         bound1=na_rest*(1-v/(3*10**5))
@@ -1349,30 +1365,37 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
 
             #plt.plot(x,cont-y,label="cont-y")
             plt.plot(x_cont,interp(x_cont),label="Continuum")
+            plt.scatter(x_cont,y_cont,label="Continuum nodes")
             plt.ylabel("Flux", fontsize=14)
             plt.xlabel(r"Wavelength  ($\AA$)", fontsize=14)
             plt.plot(x,y,color="red",label="Integral Area")
             plt.legend()
             plt.show()
+
         # Integrate the excess intensity (area over the continuum)
         area_over_continuum = trapezoid(excess_intensity, x)
-        #continuum_summed = simps(continuum_fit(x), x)
+        
+
+        #### estimating window error
+        x2,y2=chop_data(x_chopped,y_chopped,bound1-0.125*(bound2-bound1),bound2+0.125*(bound2-bound1))
+        cont2 = interp(x2)
+        excess_intensity2 = (cont2-y2)/cont2
+        area_over_continuum2 = trapezoid(excess_intensity2, x2)
+
+        x3,y3=chop_data(x_chopped,y_chopped,bound1+0.125*(bound2-bound1),bound2-0.125*(bound2-bound1))
+        cont3 = interp(x3)
+        excess_intensity3 = (cont3-y3)/cont3
+        area_over_continuum3 = trapezoid(excess_intensity3, x3)
+
+        
+        ####
+
 
         # Compute uncertainty
+        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)        
+        err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
+        #print("Erro final, ", err)
 
-        #err_cont=mad(interp(x))
-
-        """print("eer_cont before", mad(interp(x)))
-        print("eer_cont after", err_cont)"""
-        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)
-
-        #noise = mad(y_cont)
-        #err += (x[2]-x[1]) * noise  * np.sqrt(len(x)) # adding noise estimate to the error estimate
-        #err=np.sqrt(noise)
-        
-
-        
-        #np.nanmedian(y/mad(y))
 
         print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
         #print("SNR of the spectra (excluding the line) is ",SNR)
@@ -1383,10 +1406,11 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
+        average_separation_array.append(average_separation)
         #SNR_array.append(SNR)
 
 
-    return EW_array, EW_err_array#, np.array(SNR_array)
+    return EW_array, EW_err_array, average_separation_array#, np.array(SNR_array)
 
 
 

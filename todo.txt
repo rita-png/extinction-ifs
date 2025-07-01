@@ -1,50 +1,61 @@
 
-plot EW em funcao da kernel size
 
 
-Before this, I had to chagne my continuum errors estimate. Before I was using the mean absolute deviation, but now I do the same procedure of Santiago's paper with Cláudia --- compute the continuum with a base resolution (a given kernel size), and then with 25% more points, as well as with 25% less points. Then I take 
-i do this study by inputting the errors from muse. the goal is, after fixing what the optimal kernel size, fix it 
-imagens das diferences SNR para diferentes kernel sizes
+MAIL PEDRO RIBERIO
 
 
 
 
-I think this is a choice that will be case-dependent (whether we want to measure the EW of the host or of the MW, for instance)
+
+baltasar
 
 
-msg santiago
-(done) mail ana mourao
-mail pedro ribeiro
+
+
+mallorca buff
+mail cgd
+
+
+saber a profundidad e da supernova, se está pertode zonas do disco, de star formation
+
+tipo ii tem csm
+
+
+
+
+--
+
+
+
 ramuch
 mails todos
-farmacia
-irs
 investir
 
 
-
+farelones+vale nevado
+cajon del maipo civitatis
+templo bahai
 
 calendário:
 
-iceclimbing com andes.chile 28 julho 150 luca
-6julho @capitaltravel_cl iceclimbing
+el pintor 5 julho com capital travel
 
-el pintor invernal 60 luca 19 julio @hikecamp.cl
+el pintor invernal 60 luca 19 julio @hikecamp.cl (4180 m)
+E/OU cerro san ramon  12-13 julho (3253 m)
 
+19-20 julio salida ramuch
 
+6julho capital travel cajon del maipo con raquetas 50 luca
+
+ski
 ----
 
 
 
-urgent to do
-
-
-inscrever ice climbing
-
-
 hoje sem falta:
 
-esim refund, recebi reembolso summer school?, casaco patagonia, botas
+esim refund, recebi reembolso summer school?
+
 
 
 
@@ -97,8 +108,6 @@ ler papers
 
 
 fazer contas €
-
-irs
 
 
 
@@ -209,7 +218,7 @@ include integration window error,
 
 
 outros:
-irs, david hilditch, fazer contas
+david hilditch, fazer contas
 
 
 
