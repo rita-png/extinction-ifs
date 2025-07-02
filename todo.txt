@@ -1,3 +1,12 @@
+to do now:
+
+DONE 0- todos os plots com o mesmo eixo do x (mesmo array de KSs)
+1-voronoi bins, of host line, whats value of kernel size for which the line SNR peaks?
+2-look at the host galaxy spectra at position of the SN
+3- observing proposal
+
+
+
 
 
 
@@ -38,7 +47,8 @@ templo bahai
 
 calendário:
 
-el pintor 5 julho com capital travel
+el pintor 5 julho com capital travel 70 luca
+el pintor andes.chile 95 luca 6 julho
 
 el pintor invernal 60 luca 19 julio @hikecamp.cl (4180 m)
 E/OU cerro san ramon  12-13 julho (3253 m)
@@ -48,6 +58,8 @@ E/OU cerro san ramon  12-13 julho (3253 m)
 6julho capital travel cajon del maipo con raquetas 50 luca
 
 ski
+
+highline
 ----
 
 

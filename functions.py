@@ -494,6 +494,18 @@ def chop_data(x,y,x_min,x_max,err=[]):
         return x_chopped, y_chopped, err_chopped
 
 
+def chop_data_cube(cube, wavelengths, x_min, x_max):
+    """
+    Chop a MUSE data cube along the wavelength axis.
+
+    """
+    mask = (wavelengths >= x_min) & (wavelengths <= x_max)
+    cube_chopped = cube[mask, :, :]
+    wavelengths_chopped = wavelengths[mask]
+    return cube_chopped, wavelengths_chopped
+
+
+
 ## remove duplicate points from theoretical spectra
 
 def average_duplicate_wavelengths(wavelength, flux):
@@ -1398,6 +1410,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
 
 
         print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
+        print(f"\avg sep= ", average_separation)
+        print("max, min",(np.max(x_cont)," ", np.min(x_cont)))
         #print("SNR of the spectra (excluding the line) is ",SNR)
 
         
