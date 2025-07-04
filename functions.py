@@ -330,9 +330,11 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 ## voronoi binning ##
 
 
-def voronoi(flux_map,noise_values,pixel_size=0.2,target_snr=20,plots=False,text=False):
+def voronoi(data,noise,pixel_size=0.2,target_snr=20,plots=False,text=False):
 
+    flux = stack_all(np.array(data))
 
+    noise=noise.ravel()
 
     ny, nx = flux_map.shape
     x_coords, y_coords = np.meshgrid(np.arange(nx), np.arange(ny))
@@ -1299,8 +1301,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
-        #yerrMUSE=chop_data(wave,errors,na_rest-80,na_rest+80)[1]
-
+        
         
         #y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
         # continuum
@@ -1308,11 +1309,11 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         x_cont,y_cont=filterout_peaks(x,y,low=33, high=60,mode="both")#30,70
 
         #average separation in x
-        """diffs = np.diff(x_cont)
-        average_separation = np.mean(diffs)
-        print("average sep is ", average_separation)"""
-        average_separation=(np.max(x_cont)-np.min(x_cont))/KS #this is delta_lambda
+        """average_separation=(np.max(x_cont)-np.min(x_cont))/KS #this is delta_lambda
+        average_separation=(3*10**5)*average_separation/na_rest#converting delta_lambda to delva_v (in km/s)"""
+        average_separation=(wave[2]-wave[1])*KS #this is delta_lambda
         average_separation=(3*10**5)*average_separation/na_rest#converting delta_lambda to delva_v (in km/s)
+
 
         # SNR estimate        
         #SNR=np.nanmedian(y_cont/SNR_err)
