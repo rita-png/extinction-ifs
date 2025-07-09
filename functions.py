@@ -246,7 +246,7 @@ def signaltonoise_spec(spec, uncertainty):
     return snr
 ## circurlar aperture ##
 
-def circular_aperture(cube, x_center, y_center, radius):
+"""def circular_aperture(cube, x_center, y_center, radius):
     
     r = int(np.ceil(radius))
     pixels = []
@@ -267,10 +267,40 @@ def circular_aperture(cube, x_center, y_center, radius):
     
     stacked_spectrum=stacked_spectrum/area
     print("AREA",area)
-    return stacked_spectrum#, pixels
+    return stacked_spectrum#, pixels"""
 
 
-def circular_aperture_median(cube, x_center, y_center, radius):
+def circular_aperture(cube, x_center, y_center, radius):
+    r = int(np.ceil(radius))
+    pixels = []
+    stacked_spectrum = np.zeros(cube.shape[0])
+    valid_pixel_count = 0
+
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx**2 + dy**2 <= radius**2:
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+
+                # Check bounds
+                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
+                    spectrum = cube[:, y, x]
+                    
+                    if not np.any(np.isnan(spectrum)):
+                        stacked_spectrum += spectrum
+                        valid_pixel_count += 1
+                        pixels.append((x, y))
+
+    if valid_pixel_count > 0:
+        stacked_spectrum = stacked_spectrum / valid_pixel_count
+    else:
+        stacked_spectrum[:] = np.nan
+
+    
+    return stacked_spectrum
+
+
+"""def circular_aperture_median(cube, x_center, y_center, radius):
     r = int(np.ceil(radius))
     spectra_list = []
 
@@ -292,7 +322,34 @@ def circular_aperture_median(cube, x_center, y_center, radius):
     spectra_stack = np.stack(spectra_list, axis=0)  # shape: (area, wavelengths)
     median_spectrum = np.median(spectra_stack, axis=0)
     print("AREA", area)
+    return median_spectrum"""
+
+
+def circular_aperture_median(cube, x_center, y_center, radius):
+    r = int(np.ceil(radius))
+    spectra_list = []
+
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx**2 + dy**2 <= radius**2:
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+
+                # Check bounds
+                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
+                    spectrum = cube[:, y, x]
+                    if not np.all(np.isnan(spectrum)):
+                        spectra_list.append(spectrum)
+
+    if len(spectra_list) == 0:
+        raise ValueError("No valid (non-NaN) pixels found within the aperture")
+
+    spectra_stack = np.stack(spectra_list, axis=0)  # shape: (n_valid_pixels, n_wavelengths)
+    median_spectrum = np.nanmedian(spectra_stack, axis=0)
+
+    #print("Valid pixels used:", len(spectra_list))
     return median_spectrum
+
 
 ## binning ##
 
@@ -531,13 +588,70 @@ def cosine_kernel(size): #argumento espaço velocidade e não lambda
     return kernel / np.sum(kernel)"""
 ## smoothing the spectra ##
 
+#
+
+def continuum(N,x_cont,y_cont,central_wavelength):
+
+    #nodesep=round((np.max(x_cont)-np.min(x_cont))/N,0) # in Angstroms
+    #nodes = np.arange(np.min(x_cont), np.max(x_cont)+nodesep, nodesep)
+
+    nnodes = N+1
+    nodes=np.linspace(np.min(x_cont),np.max(x_cont),nnodes)
+    nodesep = (np.max(x_cont)-np.min(x_cont)) / N
+    
+    fluxnodes=np.full(nnodes, np.nan)
+    weightnodes= np.full(nnodes, 1)
+
+
+    for n in range(0,nnodes):
+        node_center = nodes[n]
+        mask = np.abs(x_cont - node_center) < (nodesep / 2)
+            
+        nearby_x = x_cont[mask]
+        nearby_y = y_cont[mask]
+            
+        if len(nearby_x)>1:
+            d_wave = (nearby_x - node_center)
+            weight=np.cos(d_wave*np.pi/(2*nodesep))
+            weight = np.clip(weight, 0, None)
+                
+            fluxnodes[n]=np.sum(nearby_y*weight)/np.sum(weight)
+
+    for i in [0, -1]:  # First and last nodes
+        if np.isnan(fluxnodes[i]):
+            node_center = nodes[i]
+            mask = np.abs(x_cont - node_center) < nodesep
+            nearby_x = x_cont[mask]
+            nearby_y = y_cont[mask]
+            if len(nearby_x) > 1:
+                d_wave = nearby_x - node_center
+                weight = np.cos(d_wave * np.pi / (2 * nodesep))
+                weight = np.clip(weight, 0, None)
+                fluxnodes[i] = np.sum(nearby_y * weight) / np.sum(weight)
+        
+    valid = ~np.isnan(fluxnodes)
+
+    if len(nodes[valid]) >= 4:
+        interp = interp1d(nodes[valid], fluxnodes[valid], kind='cubic', fill_value="extrapolate", bounds_error=False)
+    elif len(valid_nodes) >= 2:
+        interp = interp1d(nodes[valid], fluxnodes[valid], kind='linear', fill_value="extrapolate", bounds_error=False)
+
+    
+    
+
+    print("The separation between gridpoints of continuum is ",nodesep, " Angstrom")
+    print("which corresponds to a spacing of ", (3*10**5)*nodesep/central_wavelength, " in km/s")
+    print("The continuum uses ",len(nodes)," nodes")
+
+    return interp,nodes,fluxnodes
+
 def smooth_spectra(y,kernel_size):
 
     kernel = cosine_kernel(kernel_size)
     y_smooth = convolve1d(y, kernel, mode='nearest')
     return y_smooth
 
-def continuum(x,y,mode="both"):
+def continuum_old(x,y,mode="both"):
 
     ## selecting points for continuum
     x_continuum,y_continuum=filterout_peaks(x,y,mode)
@@ -858,7 +972,7 @@ def EW_map_parametric(cube_region,wave,MUSE_err,central_wavelength,mode="peaks",
             
             # fit to continuum
             if fit=="Halpha":
-                aux=continuum(x_chopped,y_smooth,mode)
+                aux=continuum_old(x_chopped,y_smooth,mode)
             elif fit=="Na":
                 aux=continuum_line(x_chopped,y_smooth,mode)
 
@@ -1054,7 +1168,7 @@ def velocity_map(cube_region,wave,lambda_rest,kernel_size=3,mode="both"):
             y_smooth=smooth_spectra(y_chopped,3)
                         
             # fit to continuum
-            #cont=continuum(x_chopped,y_smooth,mode="peaks")[0]
+            #cont=continuum_old(x_chopped,y_smooth,mode="peaks")[0]
 
             # compute continuum with kernel
             x_cont,y_cont=filterout_peaks(x_chopped,y_smooth,mode)
@@ -1287,7 +1401,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     return EW_array, EW_err_array#, np.array(SNR_array)
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(spectra_per_bin, wave, errors_per_bin, na_rest,v=600,plots=True,KS=60):
+def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1300,31 +1414,44 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         #errors=errors_per_bin[i,:] #no inputted MUSE errors anymore
         
         
-        x_chopped,y_chopped=chop_data(wave,data,na_rest-80,na_rest+80)
+        x_chopped,y_chopped=chop_data(wave,data,na_rest-100,na_rest+100)
         
-        
-        #y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
-        # continuum
         x,y=x_chopped,y_chopped#y_smooth
-        x_cont,y_cont=filterout_peaks(x,y,low=33, high=60,mode="both")#30,70
-
-        #average separation in x
-        """average_separation=(np.max(x_cont)-np.min(x_cont))/KS #this is delta_lambda
-        average_separation=(3*10**5)*average_separation/na_rest#converting delta_lambda to delva_v (in km/s)"""
-        average_separation=(wave[2]-wave[1])*KS #this is delta_lambda
-        average_separation=(3*10**5)*average_separation/na_rest#converting delta_lambda to delva_v (in km/s)
-
-
-        # SNR estimate        
-        #SNR=np.nanmedian(y_cont/SNR_err)
+        x_cont,y_cont=filterout_peaks(x,y,low=40, high=60,mode="both")#40 58
+        #y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
 
         
+
+        # continuum
+
+        delta_x = np.average(np.diff(x_cont))  # spacing in Å between x points
+        """kernel_width_angstroms = nodesep / 2
+        kernel_size = int(kernel_width_angstroms / delta_x)"""
+
         kernel_size=KS
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
         
         
         interp=interp1d(x_cont, cont, kind='cubic')
+
+
+        nodesep = kernel_size * delta_x  # in Angstroms
+
+
+        """nodes = np.linspace(np.min(x_cont), np.max(x_cont), N+1)
+        fluxnodes = interp(nodes)"""
+
+
+        # new continuum estimate
+        
+        #nodesep=(np.max(x_cont)-np.min(x_cont))/N # in Angstroms
+
+        #interp,nodes,fluxnodes=continuum(N,x_cont,y_cont,na_rest)
+        
+        
+
+        #################
         
 
         # estimating flux errors like in Santiago's paper
@@ -1354,6 +1481,11 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         cont2 = convolve1d(y_cont, cosine_kernel(int(kernel_size*0.75)), mode='nearest')
         auxcont2=interp1d(x_cont, cont2, kind='cubic')
 
+        """auxcont1=continuum(int(N*1.25),x_cont,y_cont,na_rest)[0]
+        auxcont2=continuum(int(N*0.75),x_cont,y_cont,na_rest)[0]"""
+
+
+
         err_cont=[]
         for i in range(len(x)):
             c_avg = (cont[i]+auxcont1(x[i])+auxcont2(x[i]))/3
@@ -1371,18 +1503,25 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         g = interp1d(x, excess_intensity, kind='cubic')
 
         if plots==True:
-            plt.figure(figsize=(10, 8))
-            plt.plot(x_chopped,y_chopped, label="Flux")
-
+            
+            plt.figure(figsize=(10, 8))  
             plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
 
-            #plt.plot(x,cont-y,label="cont-y")
-            plt.plot(x_cont,interp(x_cont),label="Continuum")
-            plt.scatter(x_cont,y_cont,label="Continuum nodes")
+            
+            plt.plot(x_chopped,y_chopped, label="Flux")
+
             plt.ylabel("Flux", fontsize=14)
             plt.xlabel(r"Wavelength  ($\AA$)", fontsize=14)
+
+            #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
+
+            plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
+            plt.plot(x_cont,interp(x_cont),label="Continuum")
+            #plt.ylim(45,60)
             plt.plot(x,y,color="red",label="Integral Area")
+            
             plt.legend()
+
             plt.show()
 
         # Integrate the excess intensity (area over the continuum)
@@ -1407,13 +1546,12 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
         # Compute uncertainty
         err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)        
         err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
-        #print("Erro final, ", err)
 
 
         print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
-        print(f"\avg sep= ", average_separation)
-        print("max, min",(np.max(x_cont)," ", np.min(x_cont)))
-        #print("SNR of the spectra (excluding the line) is ",SNR)
+        
+
+        print(f"\nNode separation = ", nodesep, " Angstrom")
 
         
         #print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
@@ -1421,7 +1559,9 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#(sp
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
-        average_separation_array.append(average_separation)
+
+        nodesep=(3*10**5)*nodesep/na_rest#converting nodesep in Angstrom to delva_v (in km/s)
+        average_separation_array.append(nodesep)
         #SNR_array.append(SNR)
 
 
