@@ -350,7 +350,36 @@ def circular_aperture_median(cube, x_center, y_center, radius):
     #print("Valid pixels used:", len(spectra_list))
     return median_spectrum
 
+def circular_aperture_sum(cube, x_center, y_center, radius):
+    r = int(np.ceil(radius))
+    pixels = []
+    stacked_spectrum = np.zeros(cube.shape[0])
+    valid_pixel_count = 0
 
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx**2 + dy**2 <= radius**2:
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+
+                # Check bounds
+                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
+                    spectrum = cube[:, y, x]
+                    
+                    if not np.any(np.isnan(spectrum)):
+                        stacked_spectrum += spectrum
+                        valid_pixel_count += 1
+                        pixels.append((x, y))
+
+    if valid_pixel_count > 0:
+        stacked_spectrum = stacked_spectrum
+    else:
+        stacked_spectrum[:] = np.nan
+
+    print("Valid pixels count: ",valid_pixel_count)
+
+    
+    return stacked_spectrum
 ## binning ##
 
 def sum_submatrix(matrix,row_i,col_i,row_width,col_width): #row_i,col_i,number of rows, number of cols

@@ -1,31 +1,28 @@
+questão:
+
+same KS but evaluating in different arrays gives a different result???
+
+
+
+
 to do now:
 
-DONE 0- todos os plots com o mesmo eixo do x (mesmo array de KSs)
-1-voronoi bins, of host line, whats value of kernel size for which the line SNR peaks?
-2-look at the host galaxy spectra at position of the SN
-3- observing proposal
+1-voronoi bins, of host line
 
 
 
 
 
 
-MAIL PEDRO RIBERIO
 
 
 
 
 
-baltasar
 
-
-
-
-mallorca buff
 mail cgd
 
 
-saber a profundidad e da supernova, se está pertode zonas do disco, de star formation
 
 tipo ii tem csm
 
@@ -36,28 +33,18 @@ tipo ii tem csm
 
 
 
-ramuch
 mails todos
 investir
 
 
-farelones+vale nevado
 cajon del maipo civitatis
 templo bahai
 
-calendário:
 
-el pintor 5 julho com capital travel 70 luca
-el pintor andes.chile 95 luca 6 julho
 
-el pintor invernal 60 luca 19 julio @hikecamp.cl (4180 m)
-E/OU cerro san ramon  12-13 julho (3253 m)
 
-19-20 julio salida ramuch
 
-ski
 
-highline
 ----
 
 
@@ -72,7 +59,6 @@ esim refund, recebi reembolso summer school?
 
 ler slides day 5
 
-acabr de ler este artigo time evol
 
 
 10.5 eur por 30 dias https://www.civitatis.com/pt/chip-esim-chile/#detalhes
@@ -99,7 +85,6 @@ quiche
 
 
 
-mail lab de astro cadeira
 
 
 
@@ -132,7 +117,7 @@ some of the SNe also are in the sample that is in the observing proposal page 6 
 maguire and philips have high resolution spectra of SN. cross check with the ones in AMUSING and of last proposal
 
 
-por no CV observacoes pessto e estadia eso chile
+por no CV observacoes pessto e estadia eso chile e summer school
 
 
 
@@ -152,7 +137,6 @@ day 4,5 tudo
 confirmar taxis todos
 
 
-BALTASAR??????????????
 postal do chile
 
 MAIL TAXI chile!!!!!!!!!!!!!!!!!
@@ -176,7 +160,6 @@ camara analogica
 
 encomendar fones
 
-laser chile,
 investir,
 comprar lona corda escalada
 
