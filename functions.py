@@ -379,7 +379,7 @@ def circular_aperture_sum(cube, x_center, y_center, radius):
     print("Valid pixels count: ",valid_pixel_count)
 
     
-    return stacked_spectrum
+    return stacked_spectrum,pixels
 ## binning ##
 
 def sum_submatrix(matrix,row_i,col_i,row_width,col_width): #row_i,col_i,number of rows, number of cols
@@ -1430,7 +1430,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     return EW_array, EW_err_array#, np.array(SNR_array)
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
+def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[]):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1485,8 +1485,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#spe
 
         # estimating flux errors like in Santiago's paper
         yerrMUSE=0
-        for i in range(len(y_cont)):
-            yerrMUSE+=(y_cont[i]-interp(x_cont[i]))**2
+        for k in range(len(y_cont)):
+            yerrMUSE+=(y_cont[k]-interp(x_cont[k]))**2
             yerrMUSE=np.sqrt(yerrMUSE)
         #print("New error of flux is ", yerrMUSE)
 
@@ -1516,9 +1516,9 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#spe
 
 
         err_cont=[]
-        for i in range(len(x)):
-            c_avg = (cont[i]+auxcont1(x[i])+auxcont2(x[i]))/3
-            std_dev=np.sqrt((cont[i]-c_avg)**2+(auxcont1(x[i])-c_avg)**2+(auxcont2(x[i])-c_avg)**2)
+        for j in range(len(x)):
+            c_avg = (cont[j]+auxcont1(x[j])+auxcont2(x[j]))/3
+            std_dev=np.sqrt((cont[j]-c_avg)**2+(auxcont1(x[j])-c_avg)**2+(auxcont2(x[j])-c_avg)**2)
             err_cont.append(std_dev)
 
         ##
@@ -1535,20 +1535,24 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100):#spe
             
             plt.figure(figsize=(10, 8))  
             plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
-
+            if len(titles)!=0:
+                plt.title("Aperture of "+str(titles[i])+" pixels")
             
-            plt.plot(x_chopped,y_chopped, label="Flux")
+            plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
 
             plt.ylabel("Flux", fontsize=14)
             plt.xlabel(r"Wavelength  ($\AA$)", fontsize=14)
 
             #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
 
-            plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
+            #plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
             plt.plot(x_cont,interp(x_cont),label="Continuum")
             #plt.ylim(45,60)
-            plt.plot(x,y,color="red",label="Integral Area")
-            
+            plt.plot(x,y,color="black",label="Integral Area")
+            plt.axvline(x=na_rest,label="Sodium galaxy line")
+
+
+
             plt.legend()
 
             plt.show()
