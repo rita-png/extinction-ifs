@@ -297,7 +297,7 @@ def circular_aperture(cube, x_center, y_center, radius):
         stacked_spectrum[:] = np.nan
 
     
-    return stacked_spectrum
+    return stacked_spectrum, pixels
 
 
 """def circular_aperture_median(cube, x_center, y_center, radius):
@@ -328,6 +328,7 @@ def circular_aperture(cube, x_center, y_center, radius):
 def circular_aperture_median(cube, x_center, y_center, radius):
     r = int(np.ceil(radius))
     spectra_list = []
+    pixels = []
 
     for dx in range(-r, r + 1):
         for dy in range(-r, r + 1):
@@ -338,17 +339,20 @@ def circular_aperture_median(cube, x_center, y_center, radius):
                 # Check bounds
                 if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
                     spectrum = cube[:, y, x]
-                    if not np.all(np.isnan(spectrum)):
+                    if not np.any(np.isnan(spectrum)):
                         spectra_list.append(spectrum)
+                        pixels.append((x, y))
 
     if len(spectra_list) == 0:
         raise ValueError("No valid (non-NaN) pixels found within the aperture")
 
     spectra_stack = np.stack(spectra_list, axis=0)  # shape: (n_valid_pixels, n_wavelengths)
-    median_spectrum = np.nanmedian(spectra_stack, axis=0)
+    median_spectrum = np.median(spectra_stack, axis=0)
 
-    #print("Valid pixels used:", len(spectra_list))
-    return median_spectrum
+    #print("Valid pixels count:", len(pixels))
+
+    return median_spectrum, pixels
+
 
 def circular_aperture_sum(cube, x_center, y_center, radius):
     r = int(np.ceil(radius))
@@ -1488,7 +1492,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         for k in range(len(y_cont)):
             yerrMUSE+=(y_cont[k]-interp(x_cont[k]))**2
             yerrMUSE=np.sqrt(yerrMUSE)
-        #print("New error of flux is ", yerrMUSE)
+        print("New error of flux is ", yerrMUSE)
 
         #v=600#
         bound1=na_rest*(1-v/(3*10**5))
