@@ -12,6 +12,7 @@ from scipy.ndimage import convolve1d
 import math
 from astropy.wcs import WCS
 import matplotlib.animation as animation
+from scipy.optimize import root_scalar
 import pandas as pd
 
 from astropy.coordinates import SkyCoord
@@ -26,6 +27,20 @@ from species import SpeciesInit
 from species.data.database import Database
 from species.read.read_model import ReadModel
 from species.plot.plot_spectrum import plot_spectrum
+
+
+def weighted_average(values, errors):
+
+    values = np.array(values, dtype=float)
+    errors = np.array(errors, dtype=float)
+
+    weights = 1 / errors**2
+    mean = np.sum(weights * values) / np.sum(weights)
+    unc = 1 / np.sqrt(np.sum(weights))
+
+    
+    return mean, unc
+
 
 ## visualization ##
 
@@ -422,19 +437,42 @@ def binning(image, pix_width): #this ignores the existence of NaNs
 
 def voronoi(data,noise,pixel_size=0.2,target_snr=20,plots=False,text=False):
 
-    flux = stack_all(np.array(data))
+    #flux = stack_all(np.array(data))
 
-    noise=noise.ravel()
+    noise_values=noise.ravel()
 
-    ny, nx = flux_map.shape
+    ny, nx = data.shape
     x_coords, y_coords = np.meshgrid(np.arange(nx), np.arange(ny))
     x_coords = x_coords.ravel()
     y_coords = y_coords.ravel()
-    flux_values = flux_map.ravel()
+    flux_values = data.ravel()
 
-    target_snr
+    print(len(x_coords),len(y_coords),len(flux_values),len(noise_values))
 
-    out = voronoi_2d_binning(x_coords, y_coords, flux_values, noise_values, target_snr, pixelsize=pixel_size, plot=plots, quiet=text)
+
+    # mask NaNs
+    good_mask = np.isfinite(flux_values) & np.isfinite(noise_values)
+    x_good = x_coords[good_mask]
+    y_good = y_coords[good_mask]
+    flux_good = flux_values[good_mask]
+    noise_good = noise_values[good_mask]
+
+    # run Voronoi binning only on valid points
+    print(len(x_good),len(y_good),len(flux_good),len(noise_good))
+
+    print("Lengths:", len(x_good), len(y_good), len(flux_good), len(noise_good))
+    print("Any NaN flux?", np.isnan(flux_good).any())
+    print("Any NaN noise?", np.isnan(noise_good).any())
+    print("Any zero or negative noise?", (noise_good <= 0).any())
+
+    sn_per_spaxel = flux_good/noise_good
+    print("Median SNR per spaxel:", np.nanmedian(sn_per_spaxel))
+    print("Max achievable SNR:", np.sqrt(np.sum(sn_per_spaxel**2)))
+
+
+    out = voronoi_2d_binning(x_good, y_good, flux_good, noise_good, target_snr, pixelsize=pixel_size, plot=plots, quiet=text,wvt=True)
+
+    #out = voronoi_2d_binning(x_coords, y_coords, flux_values, noise_values, target_snr, pixelsize=pixel_size, plot=plots, quiet=text)
 
     bin_num = out[0]
     x_bin = out[1]
@@ -1433,6 +1471,13 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
 
     return EW_array, EW_err_array#, np.array(SNR_array)
 
+def computer_spec_err(x_cont,y_cont,interp):
+
+    yerrMUSE=0
+    for k in range(len(y_cont)):
+        yerrMUSE+=(y_cont[k]-interp(x_cont[k]))**2
+        yerrMUSE=np.sqrt(yerrMUSE)
+    return yerrMUSE
 
 def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[]):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
@@ -1444,16 +1489,18 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         
         
         data=spectra_per_bin[i,:]
-        #errors=errors_per_bin[i,:] #no inputted MUSE errors anymore
         
         
         x_chopped,y_chopped=chop_data(wave,data,na_rest-100,na_rest+100)
         
-        x,y=x_chopped,y_chopped#y_smooth
-        x_cont,y_cont=filterout_peaks(x,y,low=40, high=60,mode="both")#40 58
-        #y_smooth=smooth_spectra(y_chopped,kernel_size=4)#y_chopped#
+        x,y=x_chopped,y_chopped
+        x_cont,y_cont=filterout_peaks(x,y,low=30, high=70,mode="both")#40 60
+        
 
         
+        
+        
+
 
         # continuum
 
@@ -1471,7 +1518,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
 
         nodesep = kernel_size * delta_x  # in Angstroms
 
-
+        # estimating flux errors like in Santiago's paper
+        yerrMUSE=computer_spec_err(x_cont,y_cont,interp)
         """nodes = np.linspace(np.min(x_cont), np.max(x_cont), N+1)
         fluxnodes = interp(nodes)"""
 
@@ -1487,18 +1535,11 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         #################
         
 
-        # estimating flux errors like in Santiago's paper
-        yerrMUSE=0
-        for k in range(len(y_cont)):
-            yerrMUSE+=(y_cont[k]-interp(x_cont[k]))**2
-            yerrMUSE=np.sqrt(yerrMUSE)
-        print("New error of flux is ", yerrMUSE)
-
-        #v=600#
-        bound1=na_rest*(1-v/(3*10**5))
-        bound2=na_rest*(1+v/(3*10**5))
+        
 
         
+        bound1=na_rest*(1-v/(3*10**5))
+        bound2=na_rest*(1+v/(3*10**5))
 
 
         x,y=chop_data(x,y,bound1,bound2)

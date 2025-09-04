@@ -1,45 +1,111 @@
-estou a tentar medir o EW da galaxia na posicao da SN2006X
-
-so consigo bom av se incluir a estrela
-
-incluir a estrela melhorar a medição nem faz sentido, porque a estrela é da mw, nessa zona devia bloquear a contribuição 
-
-
-
-
-
-
-Na EW of host galaxy está blueshiffted em relação ao comprimento de onda rest da host
-o halpha tb estará? ou seja o material da host está a afastar-se de nos, mas mais devagar do que o redshift total da galaxis. ou seja, esse braço da galaxia deve estar a 
-aproximar se de nós
-
-
-
-
-
-
-a estrela é da milky way por isso posso fazer cross match com gaia, ver metalicidade, teff, e gerar o espetro e medir a EW estelar. depois posso subtrair e assim fico com a EW
-da milky way. deve dar valores parecidos ao calculado com apertura mais pequena, simplesmente o facto de incluirmos a estrela faz com que tenhamos melhor SNR e por isso melhor medição 
-da EW do ISM da 
-
-
 
 
 plot proposta
 
-
-
-COISAS A NOTAR: LINHA DE NA DA HOST ESTÁ SLIGHTLY blueshiffted. ESSE ARM DA GALAXIA DEVERIA ESTAR A AFASTAR SE DE NOS. MAS SE VIRMOS A VELOCIDADE DO HALPHA, ELE ESTÁ PARADO (CHECK THIS!)
-ERROS DO ESPETRO SAO BUE PEQUENOS, SHOULD BE THE SUM???
-
-
-
-Fiquei a pensar se estarei a calcular bem os erros do fluxo. Neste momento, para uma determinada aperture que estou a usar, somo o fluxo a cada wavelength (não a mediana). Depois, com o espetro que obtenho, calculo os erros da mesma forma que o paper com a Cláudia (RMS da diferença entre o fluxo observado e o contínuo fora da região da linha de absorção).
-Este é o espetro e erro que obtenho (esta é a imagem que tinha enviado antes).
-
-
-CONFIRMAR QUE MAGNITUDE DOS ERROS É IGUAL USANDO _SUM OU SO MEDIAN DA CIRCULAR APERTURE
-
-
-
 9 sept deadline send physfront the poster
+
+
+
+COMPRAR OURO!!
+
+2) automatize kernel size choice and velocity window before i do the for loop for all apertures considered
+    
+
+
+28 set pe firme 22km 800 m
+17 out aldeia do xisto trail 28 km castanheira de pera
+25 out night run urban trail torres vedras
+2 nov trail cruz alta 20km 750 m
+3 nov 25km 1100 m 9h
+9 nov trail costa vicentina, 57km 1032m 30km 658m
+30 nov trilho dos linces, serra do alvao
+
+
+tendas
+https://www.bergfreunde.eu/stoic-faestast-2p-2-person-tent/
+https://www.barrabes.com/vaude-arco-1_2p/product-34164
+
+
+----
+to do hoje:
+plot proposta
+plano curricular
+trails inscrever
+
+
+**inscriºoes UCs phd
+slides e fenix auls
+mail sobres ects
+
+filipe joaquim mail ects
+
+
+
+reembolso astro statistics school??
+
+ENAA tenho de enviar slideS?
+
+
+
+
+-ler cenas da UC
+-voronoi p reuniao
+-plano curricular
+-poster
+-responder david
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+todo comprar limpeza cara, madeira viagem
+
+Bias Frames
+
+    Purpose: To remove the camera's inherent electronic read noise and sensor pattern noise. This noise occurs as the sensor reads out the image data and is present regardless of the exposure time. 
+
+How to Take:
+
+    Cover your lens or telescope to block all light from reaching the sensor.
+
+
+Flat Frames
+
+Purpose: To correct for uneven illumination (vignetting) from the lens and remove dust spots or other obstructions in the optical path. 
+How to Take:
+
+    Point your telescope or camera at an evenly illuminated, diffuse light source, such as a sky at twilight or a light panel.
