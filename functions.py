@@ -1236,7 +1236,7 @@ def velocity_map(cube_region,wave,lambda_rest,kernel_size=3,mode="both"):
             x_chopped,y_chopped=chop_data(wave,spec,b1,b2)
                         
             # smooth data
-            y_smooth=smooth_spectra(y_chopped,3)
+            y_smooth=smooth_spectra(y_chopped,kernel_size)
                         
             # fit to continuum
             #cont=continuum_old(x_chopped,y_smooth,mode="peaks")[0]
@@ -1247,9 +1247,14 @@ def velocity_map(cube_region,wave,lambda_rest,kernel_size=3,mode="both"):
             kernel = cosine_kernel(kernel_size)
             cont = convolve1d(y_cont, kernel, mode='nearest')
             interp=interp1d(x_cont, cont, kind='cubic')
-            
+            plt.axvline(x=lambda_rest,label="central wavelength")
+
             continuum = interp
-                        
+            
+            plt.plot(x_chopped,y_chopped)
+            aa,bb=chop_data(x_chopped,y_chopped,lambda_rest-4,lambda_rest+4)
+            plt.plot(aa,bb,color="black")
+            plt.show()
             
             map[i,j]=velocity(x_chopped,y_chopped,continuum,lambda_rest)
 
