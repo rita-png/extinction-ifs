@@ -1164,7 +1164,7 @@ def velocity(x,y,cont,lambda_rest):
    
     c = 3*10**5 # in km/s
 
-    x,y=chop_data(x,y,lambda_rest-4,lambda_rest+4)
+    x,y=chop_data(x,y,lambda_rest-6,lambda_rest+6)
 
 
     num,denom=0,0
@@ -1251,6 +1251,7 @@ def velocity_map(cube_region,wave,lambda_rest,kernel_size=3,mode="both"):
 
             continuum = interp
             
+            #novo
             plt.plot(x_chopped,y_chopped)
             aa,bb=chop_data(x_chopped,y_chopped,lambda_rest-4,lambda_rest+4)
             plt.plot(aa,bb,color="black")
@@ -1590,20 +1591,25 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
             
             plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
 
-            plt.ylabel("Flux", fontsize=14)
-            plt.xlabel(r"Wavelength  ($\AA$)", fontsize=14)
+            plt.ylabel("Flux", fontsize=30)
+            plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=30)
 
             #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
 
             #plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
-            plt.plot(x_cont,interp(x_cont),label="Continuum")
+            plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
             #plt.ylim(45,60)
-            plt.plot(x,y,color="black",label="Integral Area")
-            plt.axvline(x=na_rest,label="Sodium galaxy line")
+            #aquii
+            
+            plt.plot(x,y,color="black")#,label="Integral Area")
+            plt.axvline(x=na_rest,label="Na I D",color="Gray")
+            
+            plt.yticks(fontsize=25)
+            ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
+            plt.xticks(ticks,fontsize=25)
 
 
-
-            plt.legend()
+            plt.legend(fontsize=20)
 
             plt.show()
 
