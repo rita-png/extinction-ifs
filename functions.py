@@ -22,6 +22,7 @@ from astropy.wcs import WCS
 from astropy.visualization import simple_norm
 from photutils.detection import DAOStarFinder
 from astropy.stats import sigma_clipped_stats
+from astropy.coordinates import Angle
 
 from species import SpeciesInit
 from species.data.database import Database
@@ -36,8 +37,14 @@ def weighted_average(values, errors):
 
     weights = 1 / errors**2
     mean = np.sum(weights * values) / np.sum(weights)
-    unc = 1 / np.sqrt(np.sum(weights))
+    #unc = 1 / np.sqrt(np.sum(weights))
+    variance = np.sum(weights * (values - mean)**2) / np.sum(weights)
+    stddev = np.sqrt(variance)
+    unc = np.sqrt( np.average(errors)**2 + stddev**2)
 
+    """print(stddev)
+    print(unc)
+    print(np.average(errors))"""
     
     return mean, unc
 
@@ -134,11 +141,35 @@ def findWavelengths(arr, targets):
 
 ## stacking ##
 
-def stack_all(data):
+def stack_all(data,mask=[]):
     
-    image_stack = np.array(data)
+    if len(mask) == 0:
+        #image_stack = np.array(data)
+        #median_spec=np.nanmedian(image_stack, axis=0)#return np.sum(image_stack, axis=0)/len(image_stack)
+        
+        n_wave, ny, nx = data.shape
+        cube_flat = data.reshape(n_wave, -1)  # shape = (n_wave, n_spaxels)
+
+        # median across all spaxels for each wavelength
+        median_spec = np.nanmedian(cube_flat, axis=1)
+    else:
+        valid_spaxels = []
+        n_wave, ny, nx = data.shape
+
+        for iy in range(ny):
+            for ix in range(nx):
+                if mask[iy, ix]:
+                    continue  # skip masked
+                spaxel = data[:, iy, ix]
+                valid_spaxels.append(spaxel)
+
+        
+        valid_spaxels = np.array(valid_spaxels)  # shape = (n_valid_spaxels, n_wave)
+
+        median_spec = np.nanmedian(valid_spaxels, axis=0)
+
     
-    return np.median(image_stack, axis=0)#return np.sum(image_stack, axis=0)/len(image_stack)
+    return median_spec
 
 def stack(data,wave,number_images,central_wavelength):
     
@@ -259,92 +290,17 @@ def signaltonoise_spec(spec, uncertainty):
         snr = np.asarray(spec) / np.asarray(uncertainty)
     
     return snr
+
+
 ## circurlar aperture ##
 
-"""def circular_aperture(cube, x_center, y_center, radius):
-    
-    r = int(np.ceil(radius))
-    pixels = []
-    stacked_spectrum = np.zeros(cube.shape[0])  # initialize 1D spectrum array
-
-    area=0
-    for dx in range(-r, r + 1):
-        for dy in range(-r, r + 1):
-            if dx**2 + dy**2 <= radius**2:
-                area+=1
-                x = int(x_center + dx)
-                y = int(y_center + dy)
-
-                # Check bounds
-                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
-                    pixels.append((x, y))
-                    stacked_spectrum += cube[:, y, x]  # note: y is row, x is column
-    
-    stacked_spectrum=stacked_spectrum/area
-    print("AREA",area)
-    return stacked_spectrum#, pixels"""
-
-
-def circular_aperture(cube, x_center, y_center, radius):
-    r = int(np.ceil(radius))
-    pixels = []
-    stacked_spectrum = np.zeros(cube.shape[0])
-    valid_pixel_count = 0
-
-    for dx in range(-r, r + 1):
-        for dy in range(-r, r + 1):
-            if dx**2 + dy**2 <= radius**2:
-                x = int(x_center + dx)
-                y = int(y_center + dy)
-
-                # Check bounds
-                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
-                    spectrum = cube[:, y, x]
-                    
-                    if not np.any(np.isnan(spectrum)):
-                        stacked_spectrum += spectrum
-                        valid_pixel_count += 1
-                        pixels.append((x, y))
-
-    if valid_pixel_count > 0:
-        stacked_spectrum = stacked_spectrum / valid_pixel_count
-    else:
-        stacked_spectrum[:] = np.nan
+def circular_aperture_median(cube, star_coords, radius):
 
     
-    return stacked_spectrum, pixels
-
-
-"""def circular_aperture_median(cube, x_center, y_center, radius):
-    r = int(np.ceil(radius))
-    spectra_list = []
-
-    area = 0
-    for dx in range(-r, r + 1):
-        for dy in range(-r, r + 1):
-            if dx**2 + dy**2 <= radius**2:
-                x = int(x_center + dx)
-                y = int(y_center + dy)
-
-                # Check bounds
-                if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
-                    area += 1
-                    spectra_list.append(cube[:, y, x])
-
-    if area == 0:
-        raise ValueError("No pixels found within the aperture")
-
-    spectra_stack = np.stack(spectra_list, axis=0)  # shape: (area, wavelengths)
-    median_spectrum = np.median(spectra_stack, axis=0)
-    print("AREA", area)
-    return median_spectrum"""
-
-
-def circular_aperture_median(cube, x_center, y_center, radius):
+    x_center, y_center = star_coords
     r = int(np.ceil(radius))
     spectra_list = []
     pixels = []
-
     for dx in range(-r, r + 1):
         for dy in range(-r, r + 1):
             if dx**2 + dy**2 <= radius**2:
@@ -364,9 +320,10 @@ def circular_aperture_median(cube, x_center, y_center, radius):
     spectra_stack = np.stack(spectra_list, axis=0)  # shape: (n_valid_pixels, n_wavelengths)
     median_spectrum = np.median(spectra_stack, axis=0)
 
-    #print("Valid pixels count:", len(pixels))
-
+        
     return median_spectrum, pixels
+    
+
 
 
 def circular_aperture_sum(cube, x_center, y_center, radius):
@@ -430,6 +387,38 @@ def binning(image, pix_width): #this ignores the existence of NaNs
                     
                 
     return matrix
+
+
+# masking out stars
+
+
+def create_star_mask(cube, star_coords, radius):
+    
+    n_lambda, ny, nx = cube.shape
+    y, x = np.ogrid[:ny, :nx]
+
+    mask_inside = np.zeros((ny, nx), dtype=bool)
+    for x_c, y_c in star_coords:
+        mask_inside |= (x - x_c)**2 + (y - y_c)**2 <= radius**2
+
+    mask = ~mask_inside
+    
+    masked_cube = cube.copy()
+    masked_cube[:, ~mask] = np.nan  # fill with NaNs in unwanted spaxels
+
+    return masked_cube, mask
+
+
+# select random subset of pixels in a cube
+
+def random_spaxel_subset(masked_cube, mask, n_spaxels, seed=None):
+    
+    rng = np.random.default_rng(seed)
+    valid_pixels = np.argwhere(mask)  # all valid spaxels
+    selected = valid_pixels[rng.choice(len(valid_pixels), size=n_spaxels, replace=False)]
+    coords = list(map(tuple, selected))
+    subset_cube = masked_cube[:, selected[:, 0], selected[:, 1]]  # (n_lambda, n_spaxels)
+    return subset_cube, coords
 
 
 ## voronoi binning ##
@@ -1387,16 +1376,16 @@ def gaia_parameters(matched_ras,matched_decs):
                 metallicity_array[i] = result[0]["mh_gspphot"]
                 mean_mag[i] = result[0]["phot_g_mean_mag"]
                 
-                print(f"Parallax: {result[0]['parallax']} ± {result[0]['parallax_error']}")
+                """print(f"Parallax: {result[0]['parallax']} ± {result[0]['parallax_error']}")
                 print(f"Effective temperature: ", result[0]['teff_gspphot'])
                 print(f"Surface gravity log(g): ", result[0]['logg_gspphot'])
                 print(f"Metalicity: ", result[0]['mh_gspphot'])#feh_gspspec
-                print(f"Mean magnitude: ", result[0]['phot_g_mean_mag'])
+                print(f"Mean magnitude: ", result[0]['phot_g_mean_mag'])"""
 
         except Exception as e:
             print(f"Query failed for index {i}: {e}")
 
-        print(" ")
+        #print(" ")
     return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
 def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
