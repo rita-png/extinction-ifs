@@ -120,11 +120,11 @@ star_coords=np.array(stars_data[['x', 'y']].values)"""
 star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
 
 
-"""masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
+masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
 
 #saving output of create_star_mask
 np.save("masked_cube.npy", masked_cube)
-np.save("mask.npy", mask)"""
+np.save("mask.npy", mask)
 
 masked_cube = np.load("masked_cube.npy")
 mask = np.load("mask.npy")
