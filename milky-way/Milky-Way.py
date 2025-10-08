@@ -169,17 +169,24 @@ plt.savefig("MW-single-line-measurement.pdf", bbox_inches='tight')
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=True,KS=100)
 print("\nEW function is ", out[0])
 
-
+#temp
+spec = np.nanmedian(masked_cube, axis=(1, 2))
+x_chopped,y_chopped=chop_data(wave,spec,na_rest-50,na_rest+50)
+plt.figure(figsize=(8,6))
+plt.plot(x_chopped,y_chopped)   
+plt.axvline(x=na_rest)
+plt.savefig("MW-single-line-temppppp.pdf", bbox_inches='tight')
+###
 
 # random subset of spaxels, excluding MW stars
 subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
-median_spec = np.nansum(subset_cube, axis=1)
-x_chopped,y_chopped=chop_data(wave,median_spec,na_rest-50,na_rest+50)
+spec = np.nansum(subset_cube, axis=1)
+x_chopped,y_chopped=chop_data(wave,spec,na_rest-50,na_rest+50)
 plt.figure(figsize=(8,6))
 plt.plot(x_chopped,y_chopped)   
 plt.axvline(x=na_rest)
 plt.savefig("MW-subset-line-measurement.pdf", bbox_inches='tight')
-out=EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100)
 print("\nEW function is ", out[0])
 
 """
