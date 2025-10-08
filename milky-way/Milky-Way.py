@@ -11,7 +11,7 @@ from functions import *
 
 z=0.00921
 
-file_name="/DATA/SN2010ev.fits"
+file_name="SN2010ev.fits"
 
 
 data = fits.open(file_name)
@@ -120,14 +120,17 @@ star_coords=np.array(stars_data[['x', 'y']].values)"""
 star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
 
 
-masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
-
 #saving output of create_star_mask
-np.save("masked_cube.npy", masked_cube)
-np.save("mask.npy", mask)
 
-masked_cube = np.load("masked_cube.npy")
-mask = np.load("mask.npy")
+if os.path.exists("masked_cube.npy"):
+    masked_cube = np.load("masked_cube.npy")
+    mask = np.load("mask.npy")
+else:
+    masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
+    np.save("masked_cube.npy", masked_cube)
+    np.save("mask.npy", mask)
+
+
 
 
 data=cube[index]
@@ -147,13 +150,23 @@ plt.savefig("MW-masked-cube.pdf", bbox_inches='tight')
 
 # one single Av of median spectra using all spaxels, excluding MW stars
 print("Computing median spectra of all spaxels, excluding MW stars")
-median_spec = np.nansum(masked_cube, axis=(1, 2))#nanmedian
-x_chopped,y_chopped=chop_data(wave,median_spec,na_rest-50,na_rest+50)
+
+
+
+if os.path.exists("whole_masked_cube_spec.npy"):
+    spec = np.load("whole_masked_cube_spec.npy")
+else:
+    spec = np.nansum(masked_cube, axis=(1, 2))
+    np.save("whole_masked_cube_spec.npy", spec)
+
+
+
+x_chopped,y_chopped=chop_data(wave,spec,na_rest-50,na_rest+50)
 plt.figure(figsize=(8,6))
 plt.plot(x_chopped,y_chopped)   
 plt.axvline(x=na_rest)
 plt.savefig("MW-single-line-measurement.pdf", bbox_inches='tight')
-out=EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100)
 print("EW function is ", out[0])
 
 
