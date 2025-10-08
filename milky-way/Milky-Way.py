@@ -7,8 +7,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import functions
 importlib.reload(functions)
 from functions import *
-
-
 z=0.00921
 
 file_name="SN2010ev.fits"
@@ -167,7 +165,7 @@ plt.plot(x_chopped,y_chopped)
 plt.axvline(x=na_rest)
 plt.savefig("MW-single-line-measurement.pdf", bbox_inches='tight')
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=True,KS=100)
-print("\nEW function is ", out[0])
+
 
 #temp
 spec = np.nanmedian(masked_cube, axis=(1, 2))
@@ -187,7 +185,6 @@ plt.plot(x_chopped,y_chopped)
 plt.axvline(x=na_rest)
 plt.savefig("MW-subset-line-measurement.pdf", bbox_inches='tight')
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100)
-print("\nEW function is ", out[0])
 
 """
 # random subset of spaxels, excluding MW stars, diff subsets
