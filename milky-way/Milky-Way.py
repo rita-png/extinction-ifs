@@ -11,7 +11,7 @@ from functions import *
 
 z=0.00921
 
-file_name="../DATA/SN2010ev.fits"
+file_name="../../DATA/SN2010ev.fits"
 
 
 data = fits.open(file_name)
