@@ -137,7 +137,7 @@ data=cube[index]
 n_valid_pixels = np.count_nonzero(mask)
 
 ny, nx = data.shape
-print("Original image had ", ny*nx," pixels, the one after masking MW stars has ", n_valid_pixels)
+print("\nOriginal image had ", ny*nx," pixels, the one after masking MW stars has ", n_valid_pixels)
 
 
 lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
@@ -149,7 +149,7 @@ plt.savefig("MW-masked-cube.pdf", bbox_inches='tight')
 
 
 # one single Av of median spectra using all spaxels, excluding MW stars
-print("Computing median spectra of all spaxels, excluding MW stars")
+print("\nComputing median spectra of all spaxels, excluding MW stars")
 
 
 
@@ -166,8 +166,8 @@ plt.figure(figsize=(8,6))
 plt.plot(x_chopped,y_chopped)   
 plt.axvline(x=na_rest)
 plt.savefig("MW-single-line-measurement.pdf", bbox_inches='tight')
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100)
-print("EW function is ", out[0])
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=True,KS=100)
+print("\nEW function is ", out[0])
 
 
 
@@ -180,7 +180,7 @@ plt.plot(x_chopped,y_chopped)
 plt.axvline(x=na_rest)
 plt.savefig("MW-subset-line-measurement.pdf", bbox_inches='tight')
 out=EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
-print("EW function is ", out[0])
+print("\nEW function is ", out[0])
 
 """
 # random subset of spaxels, excluding MW stars, diff subsets
