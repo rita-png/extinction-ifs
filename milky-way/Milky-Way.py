@@ -120,12 +120,12 @@ star_coords=np.array(stars_data[['x', 'y']].values)"""
 star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
 
 
-masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
+"""masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
 
 #saving output of create_star_mask
 np.save("masked_cube.npy", masked_cube)
-np.save("mask.npy", mask)
-"""
+np.save("mask.npy", mask)"""
+
 masked_cube = np.load("masked_cube.npy")
 mask = np.load("mask.npy")
 
@@ -140,7 +140,7 @@ print("Original image had ", ny*nx," pixels, the one after masking MW stars has 
 lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
 plt.contour(mask, levels=[0.5], colors='red', linewidths=1, origin='lower')
 plt.imshow(data,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("MW/MW-masked-cube.pdf", bbox_inches='tight')
+plt.savefig("MW-masked-cube.pdf", bbox_inches='tight')
 
 
 
@@ -152,10 +152,12 @@ x_chopped,y_chopped=chop_data(wave,median_spec,na_rest-50,na_rest+50)
 plt.figure(figsize=(8,6))
 plt.plot(x_chopped,y_chopped)   
 plt.axvline(x=na_rest)
-plt.savefig("MW/MW-single-line-measurement.pdf", bbox_inches='tight')
-EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)"""
+plt.savefig("MW-single-line-measurement.pdf", bbox_inches='tight')
+out=EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
+print("EW function is ", out[0])
 
-"""
+
+
 # random subset of spaxels, excluding MW stars
 subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 median_spec = np.nansum(subset_cube, axis=1)
@@ -164,8 +166,10 @@ plt.figure(figsize=(8,6))
 plt.plot(x_chopped,y_chopped)   
 plt.axvline(x=na_rest)
 plt.savefig("MW-subset-line-measurement.pdf", bbox_inches='tight')
-EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
+out=EW_voronoi_bins(np.array([median_spec]),wave,na_rest,v=500,plots=False,KS=100)
+print("EW function is ", out[0])
 
+"""
 # random subset of spaxels, excluding MW stars, diff subsets
 EWs=[]
 for i in range(0,10):
