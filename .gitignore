@@ -5,3 +5,4 @@ species_database.hdf5
 *.png
 *.txt
 *.gif
+*.h5
