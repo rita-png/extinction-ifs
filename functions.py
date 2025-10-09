@@ -15,14 +15,7 @@ import matplotlib.animation as animation
 from scipy.optimize import root_scalar
 import pandas as pd
 
-from astropy.coordinates import SkyCoord
-from astroquery.gaia import Gaia
-import astropy.units as u
-from astropy.wcs import WCS
-from astropy.visualization import simple_norm
-from photutils.detection import DAOStarFinder
-from astropy.stats import sigma_clipped_stats
-from astropy.coordinates import Angle
+
 
 from species import SpeciesInit
 from species.data.database import Database
@@ -1474,7 +1467,7 @@ def computer_spec_err(x_cont,y_cont,interp):
         yerrMUSE=np.sqrt(yerrMUSE)
     return yerrMUSE
 
-def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[]):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
+def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1571,36 +1564,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
 
         g = interp1d(x, excess_intensity, kind='cubic')
 
-        if plots==True:
-            
-            plt.figure(figsize=(10, 8))  
-            plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
-            if len(titles)!=0:
-                plt.title("Aperture of "+str(titles[i])+" pixels")
-            
-            plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
-
-            plt.ylabel("Flux", fontsize=30)
-            plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=30)
-
-            #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
-
-            #plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
-            plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
-            #plt.ylim(45,60)
-            #aquii
-            
-            plt.plot(x,y,color="black")#,label="Integral Area")
-            plt.axvline(x=na_rest,label="Na I D",color="Gray")
-            
-            plt.yticks(fontsize=25)
-            ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
-            plt.xticks(ticks,fontsize=25)
-
-
-            plt.legend(fontsize=20)
-
-            plt.show()
+        
 
         # Integrate the excess intensity (area over the continuum)
         area_over_continuum = trapezoid(excess_intensity, x)
@@ -1617,23 +1581,65 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         excess_intensity3 = (cont3-y3)/cont3
         area_over_continuum3 = trapezoid(excess_intensity3, x3)
 
-        
-        ####
-
-
         # Compute uncertainty
         err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)        
         err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
 
+        ####
 
-        print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
+        if plots or save:
+            
+            plt.figure(figsize=(10, 8))  
+            plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
+            if len(titles)!=0:
+                plt.title("Aperture of "+str(titles[i])+" pixels")
+            
+            plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
+
+            plt.ylabel("Flux", fontsize=30)
+            plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=30)
+
+            #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
+
+            #plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
+            plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
+            #plt.ylim(45,60)
+            
+            
+            plt.plot(x,y,color="black")#,label="Integral Area")
+            plt.axvline(x=na_rest,label="Na I D",color="Gray")
+            
+            plt.yticks(fontsize=25)
+            ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
+            plt.xticks(ticks,fontsize=25)
+            plt.text(0.98, 0.02, f"EW={area_over_continuum:.2f} +/- {err:.2f}", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
+
+
+            plt.legend(fontsize=20)
+
+            
+            if plots:
+                plt.show()
+
+            if save:
+                print("## Saving image with name ", save)
+                plt.savefig(save, bbox_inches='tight')
+            
+            plt.close()
+
+        ###
+
         
+        if text:
 
-        print(f"\nNode separation = ", nodesep, " Angstrom")
+            print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
+            
 
-        
-        #print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
-        print("SNR of the line is ", area_over_continuum/err)
+            print(f"\nNode separation = ", nodesep, " Angstrom")
+
+            
+            #print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
+            print("SNR of the line is ", area_over_continuum/err)
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
