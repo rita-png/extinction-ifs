@@ -15,6 +15,8 @@ import matplotlib.animation as animation
 from scipy.optimize import root_scalar
 import pandas as pd
 
+import time
+
 
 
 from species import SpeciesInit
@@ -1459,13 +1461,59 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
 
     return EW_array, EW_err_array#, np.array(SNR_array)
 
-def computer_spec_err(x_cont,y_cont,interp):
 
-    yerrMUSE=0
+# estimate flux error of just one spec
+
+def estimate_spec_err(x_cont,y_cont,interp):
+
+    yerr=0
     for k in range(len(y_cont)):
-        yerrMUSE+=(y_cont[k]-interp(x_cont[k]))**2
-        yerrMUSE=np.sqrt(yerrMUSE)
-    return yerrMUSE
+        yerr+=(y_cont[k]-interp(x_cont[k]))**2
+        yerr=np.sqrt(yerr)
+    return yerr
+
+# estimate flux error of a cube
+
+def estimate_flux_error(cube,wave,wavelength,kernel_size):
+
+    start_time = time.time()
+
+    errcube=[]
+    for i in range(len(cube[1])):
+        region_err=[]
+        print("i=",i)
+        for j in range(len(cube[1][1])):
+
+            spectrum = cube[:, i, j]
+            x_chopped,y_chopped=chop_data(new_wave,spectrum,wavelength-80,wavelength+80)
+
+            if np.isnan(np.sum(y_chopped))==True:
+                err=np.NaN
+            else:
+
+                # continuum
+                x_cont,y_cont=filterout_peaks(x_chopped,y_chopped,low=33, high=60,mode="peaks")
+
+                
+                kernel = cosine_kernel(kernel_size)
+                cont = convolve1d(y_cont, kernel, mode='nearest')
+
+                interp=interp1d(x_cont, cont, kind='cubic')
+
+
+                # estimating flux errors like in Santiago's paper
+                yerr=estimate_spec_err(x_cont,y_cont,interp)
+                err = [yerr]*len(new_wave)
+                
+                
+                
+            region_err.append(err)
+        errcube.append(region_err)
+
+        print("--- %s seconds ---" % (time.time() - start_time))
+        
+    return errcube
+
 
 def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
@@ -1507,7 +1555,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         nodesep = kernel_size * delta_x  # in Angstroms
 
         # estimating flux errors like in Santiago's paper
-        yerrMUSE=computer_spec_err(x_cont,y_cont,interp)
+        yerrMUSE=estimate_spec_err(x_cont,y_cont,interp)
         """nodes = np.linspace(np.min(x_cont), np.max(x_cont), N+1)
         fluxnodes = interp(nodes)"""
 
