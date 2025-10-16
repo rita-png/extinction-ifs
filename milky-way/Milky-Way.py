@@ -172,6 +172,8 @@ else:
     np.save("whole_masked_cube_spec.npy", spec)
 
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="MW-single-line-measurement.pdf")
+EW_all,ERR_all=out[0][0],out[1][0]
+
 
 ##
 
@@ -247,13 +249,17 @@ else:
         weighted_EWs.append(yy)
         weighted_EW_errs.append(ybar)
 
-        np.save("weighted_EWs.npy", masked_cube)
-        np.save("weighted_EW_errs.npy", mask)
+    np.save("weighted_EWs.npy", weighted_EWs)
+    np.save("weighted_EW_errs.npy", weighted_EW_errs)
 
 
-plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1)
-plt.xlabel("Sizes",fontsize=15)
-plt.ylabel("Weighted EW ......",fontsize=15)
+plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
+plt.axhline(y=EW_all,label="EW using all pixels")
+plt.axhspan(EW_all - ERR_all, EW_all + ERR_all,alpha=0.1)
+plt.xlabel("Sizes S",fontsize=15)
+plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
+plt.legend()
+plt.savefig("MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()
 
 #does this depend on the size of the subset?
