@@ -14,6 +14,9 @@ from astropy.wcs import WCS
 import matplotlib.animation as animation
 from scipy.optimize import root_scalar
 import pandas as pd
+import sep
+from matplotlib.patches import Ellipse
+
 
 import time
 
@@ -471,14 +474,24 @@ def voronoi(data,noise,pixel_size=0.2,target_snr=20,plots=False,text=False):
         plt.title(f"Voronoi Binning using target SNR={target_snr}")
         plt.show()
 
-    binned_data = np.zeros(len(flux_values))
+    binned_data = np.zeros_like(flux_values)
+    bin_index_map = np.full(flux_values.shape, -1)
 
-    for i in range(0,len(n_pixels)):
+    #fill valid pixels with voronoi bin number
+    bin_index_map[good_mask] = bin_num
+    for i in np.unique(bin_num):
+        bin_mask = (bin_index_map == i)
+        binned_data[bin_mask] = np.nansum(flux_values[bin_mask])
+
+    """for i in range(0,len(n_pixels)):
         bin_mask = bin_num == i
-        binned_data[bin_mask] = np.nanmedian(flux_values[bin_mask])
+        binned_data[bin_mask] = np.nansum(flux_values[bin_mask])"""
         
     binned_data = binned_data.reshape(ny,nx)
-    bin_index_map = bin_num.reshape(ny, nx)
+    #bin_index_map = bin_num.reshape(ny, nx)
+
+    bin_index_map[good_mask] = bin_num
+    bin_index_map = bin_index_map.reshape(ny, nx)
 
     return binned_data, bin_index_map, sn_bin
 
@@ -1474,9 +1487,10 @@ def estimate_spec_err(x_cont,y_cont,interp):
 
 # estimate flux error of a cube
 
-def estimate_flux_error(cube,wave,wavelength,kernel_size):
+def estimate_flux_error(cube,wave,wavelength,kernel_size): #this can be cleaned and optimized
 
-    data, new_wave = chop_data_cube(cube, wave, wavelength-80, wavelength+80)
+    data, new_wave = cube, wave # I changed the function so that I already input the trimmed data
+    #data, new_wave = chop_data_cube(cube, wave, wavelength-80, wavelength+80)
     start_time = time.time()
 
     errcube=[]
@@ -1490,7 +1504,7 @@ def estimate_flux_error(cube,wave,wavelength,kernel_size):
 
             if np.isnan(np.sum(y_chopped))==True:
                 
-                err = [np.NaN]*len(new_wave)
+                err = [np.nan]*len(new_wave)
             else:
 
                 # continuum

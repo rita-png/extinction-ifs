@@ -219,9 +219,9 @@ plt.close()
 sizes=np.linspace(100,5000,10)
 sizes = [ int(x) for x in sizes ]
 
-print("Measuring EW of different subsets of spaxels of different sizes ",sizes)
+print("(dommented NOT Measuring EW of different subsets of spaxels of different sizes ",sizes)
 
-if os.path.exists("weighted_EWs.npy"):
+"""if os.path.exists("weighted_EWs.npy"):
     weighted_EWs = np.load("weighted_EWs.npy")
     weighted_EW_errs = np.load("weighted_EW_errs.npy")
 else:
@@ -261,9 +261,207 @@ plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
 plt.savefig("MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()
-
+"""
 #does this depend on the size of the subset?
 
+## Kron's ellipse ##
+
+data=np.nansum(cube[index-100:index+100, :, :], axis=0)#cube[index,:,:]
+data = data.astype(np.float32)
+bkg = sep.Background(data)
+data_sub = data - bkg
+
+
+objects = sep.extract(data_sub, thresh=7)
+
+lo,up = np.nanpercentile(data_sub,2),np.nanpercentile(data_sub,98)
+plt.imshow(data_sub, cmap='gray', origin='lower',clim=(lo,up))
+
+plt.title("Candidate galaxies")
+
+candidate_galaxies = [obj for obj in objects if obj['a'] > 5] 
+
+for obj in candidate_galaxies:
+    x_center, y_center, a, b, theta = obj['x'], obj['y'], obj['a'], obj['b'], obj['theta']
+    ell = Ellipse((x_center, y_center), a, b, angle=np.degrees(theta), edgecolor='red', facecolor='none', alpha=0.8)
+    plt.gca().add_patch(ell)
+    
+    print(a,b)
+
+plt.savefig("Kron-ellipse.pdf", bbox_inches='tight')
+plt.close()
+
+ny, nx = data.shape
+cy, cx = ny/2, nx/2
+kron_ellipse = min(objects, key=lambda obj: (obj['x'] - cx)**2 + (obj['y'] - cy)**2)#max(objects, key=lambda obj: obj['a'])
+
+x0, y0 = kron_ellipse['x'], kron_ellipse['y']
+a, b, theta = kron_ellipse['a'], kron_ellipse['b'], kron_ellipse['theta']
+
+print(f"Galaxy center: ({x0:.2f}, {y0:.2f}), a={a:.2f}, b={b:.2f}")
+
+kron_factor=2.5
+
+kron_a, kron_b = a * kron_factor, b * kron_factor
+
+nz, ny, nx = cube.shape
+y, x = np.mgrid[0:ny, 0:nx]
+
+x_rot = (x - x0) * np.cos(theta) + (y - y0) * np.sin(theta)
+y_rot = -(x - x0) * np.sin(theta) + (y - y0) * np.cos(theta)
+
+mask = (x_rot / kron_a)**2 + (y_rot / kron_b)**2 <= 1
+
+masked_cube = np.where(mask, cube, np.nan)
+
+
+spectrum = np.nansum(masked_cube, axis=(1, 2))
+
+
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100,save="Kron-ellipse-spectrum.pdf")
+EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
+
+## plot all values together here ##
+if os.path.exists("weighted_EWs.npy"):
+    weighted_EWs = np.load("weighted_EWs.npy")
+    weighted_EW_errs = np.load("weighted_EW_errs.npy")
+else:
+    
+    
+
+
+    weighted_EWs=[]
+    weighted_EW_errs=[]
+    for size in sizes:
+        print("\nsize ",size)
+        EWs=[]
+        EW_errs=[]
+        SNRs=[]
+        for i in range(0,50):
+            subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
+            spec = np.nansum(subset_cube, axis=1)
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save=False)
+            EWs.append(out[0][0])
+            EW_errs.append(out[1][0])
+            
+
+
+        yy,ybar=weighted_average(EWs,EW_errs)
+        weighted_EWs.append(yy)
+        weighted_EW_errs.append(ybar)
+
+    np.save("weighted_EWs.npy", weighted_EWs)
+    np.save("weighted_EW_errs.npy", weighted_EW_errs)
+
+
+plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
+plt.axhline(y=EW_all,label="EW using all pixels")
+plt.axhspan(EW_all - ERR_all, EW_all + ERR_all,alpha=0.1)
+
+plt.axhline(y=EW_ellipse,label="EW an ellipse", color="Green")
+plt.axhspan(EW_ellipse - ERR_ellipse, EW_ellipse + ERR_ellipse,alpha=0.1, color="Green")
+
+plt.xlabel("Sizes S",fontsize=15)
+plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
+plt.legend()
+plt.savefig("All-MW-EW measurements.pdf", bbox_inches='tight')
+plt.close()
 
 
 ## Voronoi binning ##
+y_center=int(y_center)
+x_center=int(x_center)
+region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
+data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)#could use cube or zoom-in in the center
+
+
+if os.path.exists("errcube.npy"):
+    errcube = np.load("errcube.npy")
+else:
+    errcube = estimate_flux_error(data,new_wave,na_rest,kernel_size=100)
+    np.save("errcube.npy",errcube)
+
+
+errcube=np.transpose(errcube, (2, 0, 1)) #this can be cleaned
+
+
+i=findWavelengths(new_wave, na_rest)[1]
+if os.path.exists("voronoi_bins.npy"):
+    voronoi_bins = np.load("voronoi_bins.npy")
+else:
+    voronoi_bins=voronoi(data[i],errcube[i],target_snr=40,pixel_size=0.2,plots=False,text=True)
+    np.save("voronoi_bins.npy",errcube)
+
+
+
+fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+
+####
+
+image = data[i]
+lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
+cmap = plt.cm.Blues_r.copy()
+im1 = ax[0].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
+cbar=fig.colorbar(im1, ax=ax[0])#, orientation="horizontal")
+ax[0].set_title("Original fluxes",fontsize=30)
+ax[0].tick_params(axis='both', which='major', labelsize=30)
+cbar.ax.tick_params(labelsize=30)
+
+
+
+image = voronoi_bins[0]
+lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
+cmap = plt.cm.Blues_r.copy()
+im1 = ax[1].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
+cbar=fig.colorbar(im1, ax=ax[1])#, orientation="horizontal")
+ax[1].set_title("Voronoi bins",fontsize=30)
+cbar.ax.tick_params(labelsize=30)
+ax[1].tick_params(axis='both', which='major', labelsize=30)
+
+plt.savefig("Voronoi_bins.pdf", bbox_inches='tight')
+plt.close()
+
+# EW per voronoi bin
+
+spectra_per_bin,err_per_bin = apply_voronoi_to_cube(data,errcube,voronoi_bins[1])
+
+EWs, EW_errs, SNRs = EW_voronoi_bins(spectra_per_bin, new_wave,na_rest,v=400,plots=True)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,na_rest,v=400,plots=True)
+
+y = np.array(EWs)
+sigma = np.array(EW_errs)
+
+w = 1 / sigma**2
+
+weighted_mean = np.sum(w * y) / np.sum(w)
+weighted_std_mean = np.sqrt(1 / np.sum(w))
+weighted_spread = np.sqrt(np.sum(w * (y - weighted_mean)**2) / np.sum(w))
+
+plt.figure(figsize=(14, 6))
+
+x_pos = np.linspace(1, len(EWs),len(EWs))
+
+
+scatter=plt.errorbar(x_pos, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5,zorder=1)
+scatter=plt.scatter(x_pos, EWs, c=SNRs,s=50, edgecolors='black', alpha=1,zorder=2)
+cbar=plt.colorbar(scatter)
+cbar.set_label('SNR', fontsize=30) 
+cbar.ax.tick_params(labelsize=30)
+plt.xlabel("Voronoi bin",fontsize=30)
+plt.ylabel("EW",fontsize=30)
+plt.title("EW for each Voronoi bin",fontsize=30)
+
+plt.axhline(y=weighted_mean)
+
+plt.fill_between(
+    x=np.array([0, len(x_pos)]),   # set these to your x-range
+    y1=weighted_mean - weighted_spread,
+    y2=weighted_mean + weighted_spread,
+    color='red',
+    alpha=0.2,
+    label='Mean ± Error'
+)
+plt.tick_params(axis='both', which='major', labelsize=30)
+
+
+plt.savefig("EWs_bins.pdf", bbox_inches='tight')
+plt.show()
