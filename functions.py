@@ -1,5 +1,10 @@
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+
+
 import numpy as np
-import astropy.io.fits as fits
+
 import matplotlib.pyplot as plt
 from scipy.fft import fft, ifft
 from PIL import Image
@@ -17,6 +22,22 @@ import pandas as pd
 import sep
 from matplotlib.patches import Ellipse
 
+from astroquery.gaia import Gaia
+from photutils.detection import DAOStarFinder
+from astropy.stats import sigma_clipped_stats
+from astropy.coordinates import Angle
+import astropy.io.fits as fits
+import astropy.units as u
+from astropy.visualization import simple_norm
+from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.data import clear_download_cache
+from astropy.coordinates import SkyCoord
+
+from hostphot.utils import plot_fits, plot_image
+from hostphot.cutouts import download_images
+from hostphot.processing import coadd_images
+from hostphot.processing import masking
+from hostphot.photometry import global_photometry as gp
 
 import time
 
@@ -1316,7 +1337,7 @@ def match_gaia(sources,header,ra,dec,width=0.2,height=0.2):
 
     ## match catalogs
     gidx, gd2d, gd3d = coords[0].match_to_catalog_sky(gaia_coords)
-    gbestidx=(gd2d.deg < 0.0008)                         #<0.00015deg=0.54''
+    gbestidx=(gd2d.deg < 0.008)                         #<0.00015deg=0.54''
 
     ## output variables
     star_ra,star_dec = np.zeros(len(sources),dtype=float),np.zeros(len(sources),dtype=float)
@@ -1834,3 +1855,4 @@ def compute_ebv_gas(Ha_flux, Hb_flux, law='calzetti'):
     # Compute E(B-V)
     ebv = (2.5 / (k_Hb - k_Ha)) * np.log10(observed_ratio / intrinsic_ratio)
     return ebv
+
