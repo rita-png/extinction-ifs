@@ -40,7 +40,6 @@ na_rest=(5890+5896)/2
 index=findWavelengths(wave, na_rest)[1]
 
 
-
 # the following aimed to find mw stars from gaia cross matching
 """
 stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
@@ -129,18 +128,19 @@ star_coords=np.array(stars_data[['x', 'y']].values)
 star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
 """
 
-## running the script to 
+## running the script to get star coords from hosphot
 import mwstars
-print(mwstars.x_matched)  # 10
-print(mwstars.y_matched)  # 20
-"""
+
+star_coords = np.column_stack((mwstars.x_matched.data, mwstars.y_matched.data))
+print(star_coords)
+
 #saving output of create_star_mask
 
 if os.path.exists("masked_cube.npy"):
     masked_cube = np.load("masked_cube.npy")
     mask = np.load("mask.npy")
 else:
-    masked_cube,mask=create_star_mask(cube, star_coords, radius=15)
+    masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
     np.save("masked_cube.npy", masked_cube)
     np.save("mask.npy", mask)
 
@@ -220,9 +220,9 @@ plt.close()
 sizes=np.linspace(100,5000,10)
 sizes = [ int(x) for x in sizes ]
 
-print("(dommented NOT Measuring EW of different subsets of spaxels of different sizes ",sizes)
-
-"""if os.path.exists("weighted_EWs.npy"):
+print("(commented NOT Measuring EW of different subsets of spaxels of different sizes ",sizes)
+#####
+if os.path.exists("weighted_EWs.npy"):
     weighted_EWs = np.load("weighted_EWs.npy")
     weighted_EW_errs = np.load("weighted_EW_errs.npy")
 else:
@@ -262,7 +262,7 @@ plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
 plt.savefig("MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()
-"""
+#####
 #does this depend on the size of the subset?
 
 ## Kron's ellipse ##
@@ -465,4 +465,4 @@ plt.tick_params(axis='both', which='major', labelsize=30)
 
 
 plt.savefig("EWs_bins.pdf", bbox_inches='tight')
-plt.show()"""
+plt.show()
