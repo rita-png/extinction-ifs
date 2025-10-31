@@ -41,19 +41,8 @@ index=findWavelengths(wave, na_rest)[1]
 
 
 
-
-#commented the following so that i only input stars_coords
+# the following aimed to find mw stars from gaia cross matching
 """
-
-from astropy.coordinates import SkyCoord
-from astroquery.gaia import Gaia
-import astropy.units as u
-from astropy.wcs import WCS
-from astropy.visualization import simple_norm
-from photutils.detection import DAOStarFinder
-from astropy.stats import sigma_clipped_stats
-from astropy.coordinates import Angle
-
 stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
 
 
@@ -77,6 +66,14 @@ x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
 print("Found ", len(x_coords), " sources!\n")
 
 
+
+lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
+plt.scatter(x_coords, y_coords, s=50, edgecolor='red', facecolor='none', label="Detected Sources")
+plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
+plt.savefig("all-detected-sources.pdf", bbox_inches='tight')
+plt.close()
+
+
 # Checking whether the sources are in Gaia catalogue
 wcs = WCS(data[1].header) 
 
@@ -86,7 +83,6 @@ center_y=int(y_len/2)
 ra, dec, _ = wcs.all_pix2world(center_x, center_y, 0, 0)
 
 #print(ra,dec)
-
 
 
 
@@ -128,11 +124,16 @@ stars_data = stars_data.dropna()
 stars_data
 
 
-star_coords=np.array(stars_data[['x', 'y']].values)"""
+star_coords=np.array(stars_data[['x', 'y']].values)
 
 star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
+"""
 
-
+## running the script to 
+import mwstars
+print(mwstars.x_matched)  # 10
+print(mwstars.y_matched)  # 20
+"""
 #saving output of create_star_mask
 
 if os.path.exists("masked_cube.npy"):
@@ -464,4 +465,4 @@ plt.tick_params(axis='both', which='major', labelsize=30)
 
 
 plt.savefig("EWs_bins.pdf", bbox_inches='tight')
-plt.show()
+plt.show()"""
