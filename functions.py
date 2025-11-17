@@ -1337,7 +1337,7 @@ def match_gaia(sources,header,ra,dec,width=0.2,height=0.2):
 
     ## match catalogs
     gidx, gd2d, gd3d = coords[0].match_to_catalog_sky(gaia_coords)
-    gbestidx=(gd2d.deg < 0.008)                         #<0.00015deg=0.54''
+    gbestidx=(gd2d.deg < 0.00027778)# 0.00027778 corresponds to 1 arcsec  0.008)                         #<0.00015deg=0.54''
 
     ## output variables
     star_ra,star_dec = np.zeros(len(sources),dtype=float),np.zeros(len(sources),dtype=float)

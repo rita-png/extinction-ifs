@@ -11,9 +11,21 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import functions
 importlib.reload(functions)
 from functions import *
-z=0.00921
 
-file_name="SN2010ev.fits"
+
+SN_name="SN2007cq"#"SN2010ev"#
+
+if SN_name=="SN2010ev":
+    z=0.00921
+    ra, dec = 156.370792, -39.830889
+elif SN_name=="SN2007cq":
+    z=0.026018
+    ra, dec = 333.66965, 5.078526
+elif SN_name=="SN2007bm":
+    z=0.006298
+    ra, dec= 171.26039,	-9.795445
+
+file_name="DATA/"+SN_name+"/"+SN_name+".fits"
 
 
 data = fits.open(file_name)
@@ -21,6 +33,12 @@ cube = data[1].data   # this is the cube, a (3681 x 341 x 604) matrix with fluxe
 header = data[1].header # this has information on the data cube
 ecube = data[2].data # this is the cube uncertainty (3681 x 341 x 604)
 
+
+
+print(data[0].header)
+
+
+"""
 x_len=len(cube[0][0])
 y_len=len(cube[0])
 
@@ -41,7 +59,7 @@ index=findWavelengths(wave, na_rest)[1]
 
 
 # the following aimed to find mw stars from gaia cross matching
-"""
+
 stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
 
 
@@ -55,7 +73,7 @@ if image.ndim == 3:
 mean, median, std = sigma_clipped_stats(image, sigma=20.0)
 
 # using DAOStarFinder to detect stars
-daofind = DAOStarFinder(fwhm=20.0, threshold=1.0*std)
+daofind = DAOStarFinder(fwhm=10.0, threshold=1*std)#(fwhm=20.0, threshold=1.0*std)
 sources = daofind(image - median)
 
 x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
@@ -69,9 +87,8 @@ print("Found ", len(x_coords), " sources!\n")
 lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
 plt.scatter(x_coords, y_coords, s=50, edgecolor='red', facecolor='none', label="Detected Sources")
 plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("all-detected-sources.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/"+"all-detected-sources.pdf", bbox_inches='tight')
 plt.close()
-
 
 # Checking whether the sources are in Gaia catalogue
 wcs = WCS(data[1].header) 
@@ -125,14 +142,17 @@ stars_data
 
 star_coords=np.array(stars_data[['x', 'y']].values)
 
-star_coords=np.array([[154, 40], [174, 109], [200, 236],[237, 273]])
-"""
+
 
 ## running the script to get star coords from hosphot
+
 import mwstars
 
-star_coords = np.column_stack((mwstars.x_matched.data, mwstars.y_matched.data))
+x, y = mwstars.return_matched_MW_stars(file_name,SN_name,z,ra,dec)
+star_coords = np.column_stack((x.data, y.data))
 print(star_coords)
+
+
 
 #saving output of create_star_mask
 
@@ -141,9 +161,14 @@ if os.path.exists("masked_cube.npy"):
     mask = np.load("mask.npy")
 else:
     masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
-    np.save("masked_cube.npy", masked_cube)
-    np.save("mask.npy", mask)
+    np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
+    np.save("DATA/"+SN_name+"/mask.npy", mask)
 
+masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
+
+
+np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
+np.save("DATA/"+SN_name+"/mask.npy", mask)
 
 
 
@@ -157,7 +182,7 @@ print("\nOriginal image had ", ny*nx," pixels, the one after masking MW stars ha
 lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
 plt.contour(mask, levels=[0.5], colors='red', linewidths=1, origin='lower')
 plt.imshow(data,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("MW-masked-cube.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/MW-masked-cube.pdf", bbox_inches='tight')
 plt.close()
 
 
@@ -166,13 +191,14 @@ plt.close()
 ## one single Av of median spectra using all spaxels, excluding MW stars
 print("\nComputing median spectra of all spaxels, excluding MW stars")
 
-if os.path.exists("whole_masked_cube_spec.npy"):
-    spec = np.load("whole_masked_cube_spec.npy")
+if os.path.exists("DATA/"+SN_name+"/whole_masked_cube_spec.npy"):
+    spec = np.load("DATA/"+SN_name+"/whole_masked_cube_spec.npy")
 else:
     spec = np.nansum(masked_cube, axis=(1, 2))
-    np.save("whole_masked_cube_spec.npy", spec)
+    np.save("DATA/"+SN_name+"/whole_masked_cube_spec.npy", spec)
+    print("\n\n\n COMPUTING \n\n\n\n")
 
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="MW-single-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/MW-single-line-measurement.pdf")
 EW_all,ERR_all=out[0][0],out[1][0]
 
 
@@ -181,7 +207,7 @@ EW_all,ERR_all=out[0][0],out[1][0]
 # random subset of spaxels, excluding MW stars
 subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 spec = np.nansum(subset_cube, axis=1)
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="MW-subset-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/MW-subset-line-measurement.pdf")
 
 ##
 
@@ -209,7 +235,7 @@ plt.ylabel(" EW for a given subset of pixels",fontsize=15)
 yy,ybar=weighted_average(EWs,EW_errs)
 plt.axhline(y=yy)
 plt.axhspan(yy - ybar, yy + ybar,alpha=0.1)
-plt.savefig("MW-diff-subsets-line-measurement.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/MW-diff-subsets-line-measurement.pdf", bbox_inches='tight')
 plt.close()
 
 
@@ -220,11 +246,10 @@ plt.close()
 sizes=np.linspace(100,5000,10)
 sizes = [ int(x) for x in sizes ]
 
-print("(commented NOT Measuring EW of different subsets of spaxels of different sizes ",sizes)
 #####
-if os.path.exists("weighted_EWs.npy"):
-    weighted_EWs = np.load("weighted_EWs.npy")
-    weighted_EW_errs = np.load("weighted_EW_errs.npy")
+if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
+    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
+    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
 else:
     
     
@@ -250,8 +275,8 @@ else:
         weighted_EWs.append(yy)
         weighted_EW_errs.append(ybar)
 
-    np.save("weighted_EWs.npy", weighted_EWs)
-    np.save("weighted_EW_errs.npy", weighted_EW_errs)
+    np.save("DATA/"+SN_name+"/weighted_EWs.npy", weighted_EWs)
+    np.save("DATA/"+SN_name+"/weighted_EW_errs.npy", weighted_EW_errs)
 
 
 plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
@@ -260,7 +285,7 @@ plt.axhspan(EW_all - ERR_all, EW_all + ERR_all,alpha=0.1)
 plt.xlabel("Sizes S",fontsize=15)
 plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
-plt.savefig("MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()
 #####
 #does this depend on the size of the subset?
@@ -289,7 +314,7 @@ for obj in candidate_galaxies:
     
     print(a,b)
 
-plt.savefig("Kron-ellipse.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/Kron-ellipse.pdf", bbox_inches='tight')
 plt.close()
 
 ny, nx = data.shape
@@ -319,18 +344,70 @@ masked_cube = np.where(mask, cube, np.nan)
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 
 
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100,save="Kron-ellipse-spectrum.pdf")
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
+
+## Kron ellipse of different sizes
+factors=[1,2,3,4,5,6,7]
+
+smajor_axis=[]
+b_values=[]
+
+EWs_diff_axis=[]
+for kron_factor in factors:
+    kron_a, kron_b = a * kron_factor, b * kron_factor
+
+    smajor_axis.append(max(kron_a,kron_b))
+    b_values.append(min(kron_a,kron_b))
+
+    nz, ny, nx = cube.shape
+    y, x = np.mgrid[0:ny, 0:nx]
+
+    x_rot = (x - x0) * np.cos(theta) + (y - y0) * np.sin(theta)
+    y_rot = -(x - x0) * np.sin(theta) + (y - y0) * np.cos(theta)
+
+    mask = (x_rot / kron_a)**2 + (y_rot / kron_b)**2 <= 1
+
+    masked_cube = np.where(mask, cube, np.nan)
+
+
+    spectrum = np.nansum(masked_cube, axis=(1, 2))
+
+
+    out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100)
+    EWs_diff_axis.append(out[0][0])#incerteza é #out[1][0]
+    
+
+####
+
+fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+
+#left plot being the ellipses drawn
+ax[0].imshow(data_sub, cmap='gray', origin='lower',clim=(lo,up))
+
+i=0
+for a in range(0,len(smajor_axis)-1):
+    i+=1
+    ell = Ellipse((obj['x'], obj['y']), a, b_values[i], angle=np.degrees(theta), edgecolor='red', facecolor='none', alpha=0.8)
+    ax[0].add_patch(ell)
+    
+#right plot being the scatter of the EW values
+im1 = ax[1].scatter(smajor_axis,EWs_diff_axis)
+ax[1].set_title("EW values for different ellipses "+SN_name,fontsize=30)
+ax[1].set_xlabel("Semi-major axis length")
+
+plt.savefig("DATA/"+SN_name+"/Kron-ellipses_diff_sizes.pdf", bbox_inches='tight')
+plt.close()
+
+
 ## plot all values together here ##
-if os.path.exists("weighted_EWs.npy"):
-    weighted_EWs = np.load("weighted_EWs.npy")
-    weighted_EW_errs = np.load("weighted_EW_errs.npy")
+if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
+    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
+    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
+
 else:
     
-    
-
-
     weighted_EWs=[]
     weighted_EW_errs=[]
     for size in sizes:
@@ -339,20 +416,20 @@ else:
         EW_errs=[]
         SNRs=[]
         for i in range(0,50):
+            
             subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
             spec = np.nansum(subset_cube, axis=1)
             out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save=False)
             EWs.append(out[0][0])
             EW_errs.append(out[1][0])
+            if size==3366 and i==1:
+                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
             
-
-
         yy,ybar=weighted_average(EWs,EW_errs)
         weighted_EWs.append(yy)
         weighted_EW_errs.append(ybar)
-
-    np.save("weighted_EWs.npy", weighted_EWs)
-    np.save("weighted_EW_errs.npy", weighted_EW_errs)
+    np.save("DATA/"+SN_name+"/weighted_EWs.npy", weighted_EWs)
+    np.save("DATA/"+SN_name+"/weighted_EW_errs.npy", weighted_EW_errs)
 
 
 plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
@@ -365,12 +442,12 @@ plt.axhspan(EW_ellipse - ERR_ellipse, EW_ellipse + ERR_ellipse,alpha=0.1, color=
 plt.xlabel("Sizes S",fontsize=15)
 plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
-plt.savefig("All-MW-EW measurements.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/All-MW-EW measurements.pdf", bbox_inches='tight')
 plt.close()
-
+"""
 
 ## Voronoi binning ##
-y_center=int(y_center)
+"""y_center=int(y_center)
 x_center=int(x_center)
 region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
 data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)#could use cube or zoom-in in the center
@@ -465,4 +542,4 @@ plt.tick_params(axis='both', which='major', labelsize=30)
 
 
 plt.savefig("EWs_bins.pdf", bbox_inches='tight')
-plt.show()
+plt.show()"""
