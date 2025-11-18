@@ -9,3 +9,4 @@ species_database.hdf5
 *.hdf5
 *.npy
 milky-way/images/
+milky-way/DATA/
