@@ -216,7 +216,21 @@ def return_matched_MW_stars(file_name,SN_name,z,ra,dec):
     x_matched = x_coords[matched_idx]
     y_matched = y_coords[matched_idx]
 
+
+    ##this is just needed for sn2010ev
+    ny, nx = (cube[100]).shape
+    x0, y0 = nx/2, ny/2
+
+    d = np.hypot(x_matched - x0, y_matched - y0)
+
+    remove_idx = np.argmin(d)
+
+    x_matched = np.delete(x_matched, remove_idx)
+    y_matched = np.delete(y_matched, remove_idx)
+
+
     print(f"Matched {len(x_matched)} / {len(x_coords)} sources within {tol} px tolerance.")
+    print("Warning! Removing centermost star (for sn2010ev). Undo this for other SNe")
 
 
 

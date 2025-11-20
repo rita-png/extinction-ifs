@@ -149,7 +149,6 @@ x, y = mwstars.return_matched_MW_stars(file_name,SN_name,z,ra,dec)
 star_coords = np.column_stack((x.data, y.data))
 stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
 
-
 i=index
 
 image = stacked_cube
@@ -157,7 +156,7 @@ image = stacked_cube
 if image.ndim == 3:
     image = np.mean(image, axis=-1)
 
-mean, median, std = sigma_clipped_stats(image, sigma=20.0)
+"""mean, median, std = sigma_clipped_stats(image, sigma=20.0)
 
 # using DAOStarFinder to detect stars
 daofind = DAOStarFinder(fwhm=10.0, threshold=1*std)#(fwhm=20.0, threshold=1.0*std)
@@ -226,7 +225,7 @@ stars_data
 
 
 star_coords=np.array(stars_data[['x', 'y']].values)
-print(star_coords)
+print(star_coords)"""
 
 
 
@@ -277,7 +276,7 @@ EW_all,ERR_all=out[0][0],out[1][0]
 ##
 
 # random subset of spaxels, excluding MW stars
-subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
+"""subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 spec = np.nansum(subset_cube, axis=1)
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/MW-subset-line-measurement.pdf")
 
@@ -319,10 +318,10 @@ sizes=np.linspace(100,5000,10)
 sizes = [ int(x) for x in sizes ]
 
 #####
-"""if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
-    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
-    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
-else:"""
+#if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
+#    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
+#    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
+#else:
     
     
 
@@ -359,9 +358,8 @@ plt.xlabel("Sizes S",fontsize=15)
 plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
 plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
-plt.close()
+plt.close()"""
 #####
-#does this depend on the size of the subset?
 
 ## Kron's ellipse ##
 
@@ -399,7 +397,7 @@ a, b, theta = kron_ellipse['a'], kron_ellipse['b'], kron_ellipse['theta']
 
 print(f"Galaxy center: ({x0:.2f}, {y0:.2f}), a={a:.2f}, b={b:.2f}")
 
-kron_factor=2.5
+kron_factor=1#2.5
 
 kron_a, kron_b = a * kron_factor, b * kron_factor
 
@@ -420,57 +418,136 @@ spectrum = np.nansum(masked_cube, axis=(1, 2))
 out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
+## Isophotes
 
-## Kron ellipse of different sizes
-"""factors=[1,2,3,4,5,6,7]
+ny, nx = data_sub.shape
+x0, y0 = nx / 2, ny / 2
 
-smajor_axis=[]
-b_values=[]
+def dist(obj):
+    return np.hypot(obj['x'] - x0, obj['y'] - y0)
 
-EWs_diff_axis=[]
-for kron_factor in factors:
-    kron_a, kron_b = a * kron_factor, b * kron_factor
+closest = min(candidate_galaxies, key=dist)
 
-    smajor_axis.append(max(kron_a,kron_b))
-    b_values.append(min(kron_a,kron_b))
-
-    nz, ny, nx = cube.shape
-    y, x = np.mgrid[0:ny, 0:nx]
-
-    x_rot = (x - x0) * np.cos(theta) + (y - y0) * np.sin(theta)
-    y_rot = -(x - x0) * np.sin(theta) + (y - y0) * np.cos(theta)
-
-    mask = (x_rot / kron_a)**2 + (y_rot / kron_b)**2 <= 1
-
-    masked_cube = np.where(mask, cube, np.nan)
+x_center = closest['x']
+y_center = closest['y']
+a        = closest['a']
+b        = closest['b']
+theta    = closest['theta']
 
 
-    spectrum = np.nansum(masked_cube, axis=(1, 2))
+geometry = EllipseGeometry(x0=x_center, y0=y_center, sma=a, eps=1-b/a,
+                           pa=theta)
+
+aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma,
+                          geometry.sma * (1 - geometry.eps), geometry.pa)
 
 
-    out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100)
-    EWs_diff_axis.append(out[0][0])#incerteza é #out[1][0]
-"""
-#PASTE here cenas da ellipse nvoa
+ellipse = IsoEllipse(data, geometry)
+
+isolist = ellipse.fit_image()
+
+model_image = build_ellipse_model(data.shape, isolist)
+
+residual = data - model_image
+
+# plotting isophotes
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(figsize=(14, 5), nrows=2, ncols=2)
+fig.subplots_adjust(left=0.04, right=0.98, bottom=0.02, top=0.98)
+
+
+lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
+ax1.imshow(data, origin='lower',clim=(lo,up))
+
+# plotting ellipse with matplotlib
+ell = Ellipse((geometry.x0, geometry.y0), geometry.sma, (geometry.sma * (1 - geometry.eps)), angle=geometry.pa*180/np.pi,
+              edgecolor='white', facecolor='none', linewidth=1.5)
+
+ax1.add_patch(ell)
+
+ax2.imshow(data, origin='lower',clim=(lo,up))
+ax2.set_title('Data')
+
+smas = np.linspace(closest['a']*0.25,closest['a']*2.5,20)#np.linspace(10, 50, 5)
+for sma in smas:
+    iso = isolist.get_closest(sma)
+    x, y, = iso.sampled_coordinates()
+    ax2.plot(x, y, color='white')
+
+lo,up = np.nanpercentile(model_image,2),np.nanpercentile(model_image,98)
+ax3.imshow(model_image, origin='lower',clim=(lo,up))
+ax3.set_title('Ellipse Model')
+
+lo,up = np.nanpercentile(residual,2),np.nanpercentile(residual,98)
+ax4.imshow(residual, origin='lower',clim=(lo,up))
+ax4.set_title('Residual')
+
+plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+
+plt.close()
+
+
+#compute spectra inside each isophote
+
+EWs=[]
+EW_errs=[]
+
+specs=[]
+for sma in smas:
+    iso = isolist.get_closest(sma)
+
+    aper=EllipticalAperture(
+            (iso.x0, iso.y0),
+            iso.sma,
+            iso.sma * (1 - iso.eps),
+            theta=iso.pa)
+
+    mask = aper.to_mask(method='exact').to_image(data.shape)
+    mask = mask.astype(bool)
+    #spec_ellipse = cube * mask
+    spec_ellipse = masked_cube * mask
+    spec = np.nanmedian(spec_ellipse, axis=(1, 2))#aqui era nansum
+    print(spec)
+    specs.append(spec)
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec/"+str(int(sma))+".pdf")
+    EWs.append(out[0][0])
+    EW_errs.append(out[1][0])
+            
+
+#plot example spectra of ellipses with different sizes
+"""N = len(specs)
+ncols = 2
+nrows = math.ceil(N / ncols)
+
+fig, axes = plt.subplots(nrows, ncols, figsize=(20, 4*nrows), sharex=True, sharey=True)
+axes = axes.flatten()
+
+for i, spec in enumerate(specs):
+    axes[i].plot(wave, spec)
+    axes[i].set_title(f"sma={smas[i]:.1f}")
+for j in range(N, len(axes)):
+    axes[j].axis('off')
+
+plt.tight_layout()
+plt.savefig("DATA/"+SN_name+"/isophotes-specs.pdf", bbox_inches='tight')
+plt.close()"""
 
 
 
+# plotting EWs
+fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+
+ax[0].errorbar(smas,EWs, yerr=EW_errs, fmt='o', c='Blue', capsize=5,zorder=1)
+ax[0].set_xlabel("Semi major axis",fontsize=12)
+ax[0].set_ylabel("EW",fontsize=12)
+ax[0].set_title("EW for spectra inside isophotes",fontsize=15)
+
+ax[1].scatter(smas,np.divide(EWs,EW_errs))
+ax[0].set_xlabel("Semi major axis",fontsize=12)
+ax[0].set_ylabel("SNR",fontsize=12)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+plt.savefig("DATA/"+SN_name+"/isophotes_EWs.pdf", bbox_inches='tight')
+plt.close()
 
 
 
@@ -478,26 +555,7 @@ for kron_factor in factors:
 
 
 ####
-
-fig, ax = plt.subplots(1, 2, figsize=(20, 8))
-
-#left plot being the ellipses drawn
-ax[0].imshow(data_sub, cmap='gray', origin='lower',clim=(lo,up))
-
-i=0
-for a in range(0,len(smajor_axis)-1):
-    i+=1
-    ell = Ellipse((obj['x'], obj['y']), a, b_values[i], angle=np.degrees(theta), edgecolor='red', facecolor='none', alpha=0.8)
-    ax[0].add_patch(ell)
-    
-#right plot being the scatter of the EW values
-im1 = ax[1].scatter(smajor_axis,EWs_diff_axis)
-ax[1].set_title("EW values for different ellipses "+SN_name,fontsize=30)
-ax[1].set_xlabel("Semi-major axis length")
-
-plt.savefig("DATA/"+SN_name+"/Kron-ellipses_diff_sizes.pdf", bbox_inches='tight')
-plt.close()
-
+"""
 
 ## plot all values together here ##
 if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
@@ -543,10 +601,11 @@ plt.legend()
 plt.savefig("DATA/"+SN_name+"/All-MW-EW measurements.pdf", bbox_inches='tight')
 plt.close()
 
-
-
+"""
+"""
 ## Voronoi binning ##
-"""y_center=int(y_center)
+this y_center need to be defined
+y_center=int(y_center)
 x_center=int(x_center)
 region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
 data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)#could use cube or zoom-in in the center

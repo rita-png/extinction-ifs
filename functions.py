@@ -33,7 +33,8 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.data import clear_download_cache
 from astropy.coordinates import SkyCoord
 
-from hostphot.utils import plot_fits, plot_image
+from hostphot.utils import plot_fits
+from hostphot.utils import plot_image
 from hostphot.cutouts import download_images
 from hostphot.processing import coadd_images
 from hostphot.processing import masking
@@ -47,6 +48,14 @@ from species import SpeciesInit
 from species.data.database import Database
 from species.read.read_model import ReadModel
 from species.plot.plot_spectrum import plot_spectrum
+
+
+from photutils.isophote import EllipseGeometry
+from photutils.aperture import EllipticalAperture
+from photutils.isophote import Ellipse as IsoEllipse
+from photutils.isophote import build_ellipse_model
+from astropy.modeling.models import Gaussian2D
+from photutils.datasets import make_noise_image
 
 
 def weighted_average(values, errors):
@@ -536,8 +545,8 @@ def apply_voronoi_to_cube(muse_cube, muse_cube_err, voronoi_bins):
         bin_pixels_err = muse_cube_err[:, bin_mask]
 
         # Take the median (or mean) across the spatial pixels for each wavelength
-        binned_spectra[bin_idx] = np.nanmedian(bin_pixels, axis=1)
-        binned_error[bin_idx] = np.nanmedian(bin_pixels_err, axis=1)
+        binned_spectra[bin_idx] = np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)
+        binned_error[bin_idx] = np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels_err, axis=1)
 
     return binned_spectra,binned_error  # Shape: [n_bins, n_wave]
 
@@ -1417,6 +1426,8 @@ def gaia_parameters(matched_ras,matched_decs):
         #print(" ")
     return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
+
+
 def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     EW_array=[]
     EW_err_array=[]
@@ -1617,7 +1628,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
 
         x,y=chop_data(x,y,bound1,bound2)
         
-
+        if len(x)==0:
+            print("Warning!! no points to interpolate")
         cont = interp(x)
 
 
