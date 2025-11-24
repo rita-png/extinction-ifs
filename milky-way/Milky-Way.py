@@ -467,7 +467,17 @@ ax1.add_patch(ell)
 ax2.imshow(data, origin='lower',clim=(lo,up))
 ax2.set_title('Data')
 
-smas = np.linspace(closest['a']*0.25,closest['a']*2.5,20)#np.linspace(10, 50, 5)
+available_smas = [iso.sma for iso in isolist]
+available_smas = np.array(available_smas, dtype=float)
+available_smas = available_smas[available_smas > 3]
+
+target_values = np.linspace(available_smas[0], available_smas[-1], 15)
+smas = np.array([available_smas[np.argmin(np.abs(available_smas - t))] for t in target_values])
+smas = np.unique(smas)
+
+print(smas)
+
+
 for sma in smas:
     iso = isolist.get_closest(sma)
     x, y, = iso.sampled_coordinates()
@@ -504,9 +514,15 @@ for sma in smas:
     mask = aper.to_mask(method='exact').to_image(data.shape)
     mask = mask.astype(bool)
     #spec_ellipse = cube * mask
-    spec_ellipse = masked_cube * mask
-    spec = np.nanmedian(spec_ellipse, axis=(1, 2))#aqui era nansum
-    print(spec)
+
+    #sum
+    #spec_ellipse = masked_cube * mask
+    #spec = np.nansum(spec_ellipse, axis=(1, 2))
+
+    #median
+    pix = masked_cube[:, mask]
+    spec = np.nanmedian(pix, axis=1)
+    
     specs.append(spec)
     out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec/"+str(int(sma))+".pdf")
     EWs.append(out[0][0])
