@@ -112,8 +112,8 @@ mw_mask=mask
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
-region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
-mw_mask=mw_mask[y_center-100:y_center+100,x_center-100:x_center+100]
+region=cube[:,y_center-70:y_center+70,x_center-70:x_center+70]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
+mw_mask=mw_mask[y_center-70:y_center+70,x_center-70:x_center+70]
 data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)
 
 
@@ -262,9 +262,11 @@ sigma = np.array(EW_errs)
 w = 1 / sigma**2
 
 weighted_mean = np.sum(w * y) / np.sum(w)
-weighted_std_mean = np.sqrt(1 / np.sum(w))
-weighted_spread = np.sqrt(np.sum(w * (y - weighted_mean)**2) / np.sum(w))
-std_dev = np.sqrt(np.sum((y -  weighted_mean)**2) / len(y))
+mean_unc = np.sqrt(1 / np.sum(w))
+
+
+weighted_std_dev = np.sqrt(np.sum(w * (y - weighted_mean)**2) / np.sum(w))
+#std_dev = np.sqrt(np.sum((y -  weighted_mean)**2) / len(y))
 
 plt.figure(figsize=(22, 6))
 
@@ -277,15 +279,15 @@ cbar.ax.tick_params(labelsize=20)
 plt.xlabel("Distance from image center (px)",fontsize=20)
 plt.ylabel("EW",fontsize=20)
 plt.title("EW for each Voronoi bin",fontsize=20)
-plt.text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_spread:.2f} (weigthed mean +/- spread)", ha='left', va='top', transform=plt.gca().transAxes,fontsize=20)
-plt.text(0.02, 0.90, f"Std deviation = {std_dev:.2f}", ha='left', va='top', transform=plt.gca().transAxes,fontsize=20)
+plt.text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f} (weigthed mean +/- weighted std_dev)", ha='left', va='top', transform=plt.gca().transAxes,fontsize=20)
+plt.text(0.02, 0.90, f"Mean uncertainty = {mean_unc:.4f}", ha='left', va='top', transform=plt.gca().transAxes,fontsize=20)
 
 plt.axhline(y=weighted_mean)
 
 plt.fill_between(
     x=np.array([0, len(centroids)]),   # set these to your x-range
-    y1=weighted_mean - weighted_spread,
-    y2=weighted_mean + weighted_spread,
+    y1=weighted_mean - weighted_std_dev,
+    y2=weighted_mean + weighted_std_dev,
     color='red',
     alpha=0.2,
     label='Mean ± Error'
