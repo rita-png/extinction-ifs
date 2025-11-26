@@ -231,9 +231,9 @@ print(star_coords)"""
 
 #saving output of create_star_mask
 
-"""if os.path.exists("masked_cube.npy"):
-    masked_cube = np.load("masked_cube.npy")
-    mask = np.load("mask.npy")
+"""if os.path.exists("DATA/"+SN_name+"/masked_cube.npy"):
+    masked_cube = np.load("DATA/"+SN_name+"/masked_cube.npy")
+    mask = np.load("DATA/"+SN_name+"mask.npy")
 else:
     masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
     np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
@@ -501,7 +501,6 @@ plt.close()
 EWs=[]
 EW_errs=[]
 
-specs=[]
 for sma in smas:
     iso = isolist.get_closest(sma)
 
@@ -516,53 +515,49 @@ for sma in smas:
     #spec_ellipse = cube * mask
 
     #sum
-    #spec_ellipse = masked_cube * mask
-    #spec = np.nansum(spec_ellipse, axis=(1, 2))
+    spec_ellipse = masked_cube * mask
+    spec = np.nansum(spec_ellipse, axis=(1, 2))
+    
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+    EWs_sum.append(out[0][0])
+    EW_errs_sum.append(out[1][0])
 
     #median
     pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
-    specs.append(spec)
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec/"+str(int(sma))+".pdf")
-    EWs.append(out[0][0])
-    EW_errs.append(out[1][0])
-            
-
-#plot example spectra of ellipses with different sizes
-"""N = len(specs)
-ncols = 2
-nrows = math.ceil(N / ncols)
-
-fig, axes = plt.subplots(nrows, ncols, figsize=(20, 4*nrows), sharex=True, sharey=True)
-axes = axes.flatten()
-
-for i, spec in enumerate(specs):
-    axes[i].plot(wave, spec)
-    axes[i].set_title(f"sma={smas[i]:.1f}")
-for j in range(N, len(axes)):
-    axes[j].axis('off')
-
-plt.tight_layout()
-plt.savefig("DATA/"+SN_name+"/isophotes-specs.pdf", bbox_inches='tight')
-plt.close()"""
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+    EWs_median.append(out[0][0])
+    EW_errs_median.append(out[1][0])
 
 
 
-# plotting EWs
+
+# plotting EWs sum
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
-
-ax[0].errorbar(smas,EWs, yerr=EW_errs, fmt='o', c='Blue', capsize=5,zorder=1)
+ax[0].errorbar(smas,EWs_sum, yerr=EW_errs_sum, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
 ax[0].set_ylabel("EW",fontsize=12)
-ax[0].set_title("EW for spectra inside isophotes",fontsize=15)
+ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
+ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
+ax[1].set_xlabel("Semi major axis",fontsize=12)
+ax[1].set_ylabel("SNR",fontsize=12)
 
-ax[1].scatter(smas,np.divide(EWs,EW_errs))
+plt.savefig("DATA/"+SN_name+"/isophotes_EWs_sum.pdf", bbox_inches='tight')
+plt.close()
+
+
+# plotting EWs median
+fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
-ax[0].set_ylabel("SNR",fontsize=12)
+ax[0].set_ylabel("EW",fontsize=12)
+ax[0].set_title("EW for spectra inside isophotes, using median of spectra",fontsize=15)
+ax[1].scatter(smas,np.divide(EWs_median,EW_errs_median))
+ax[1].set_xlabel("Semi major axis",fontsize=12)
+ax[1].set_ylabel("SNR",fontsize=12)
 
-
-plt.savefig("DATA/"+SN_name+"/isophotes_EWs.pdf", bbox_inches='tight')
+plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
 plt.close()
 
 
@@ -571,9 +566,10 @@ plt.close()
 
 
 ####
+
 """
 
-## plot all values together here ##
+## EWs of subsets of pixels ##
 if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
     weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
     weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
@@ -618,6 +614,14 @@ plt.savefig("DATA/"+SN_name+"/All-MW-EW measurements.pdf", bbox_inches='tight')
 plt.close()
 
 """
+
+
+## plot all values together here ##
+#valor de EW dentro da isophote com maior SNR (com a mediana, com a media) são hlines
+#valor EW obtido dos voronoi bins
+
+
+
 """
 ## Voronoi binning ##
 this y_center need to be defined
