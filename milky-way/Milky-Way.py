@@ -55,8 +55,7 @@ na_rest=(5890+5896)/2
 index=findWavelengths(wave, na_rest)[1]
 
 
-# the following aimed to find mw stars from gaia cross matching
-"""
+
 stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
 
 
@@ -67,26 +66,37 @@ image = stacked_cube
 if image.ndim == 3:
     image = np.mean(image, axis=-1)
 
-mean, median, std = sigma_clipped_stats(image, sigma=20.0)
+mean, median, std = sigma_clipped_stats(image, sigma=3.0)
 
 # using DAOStarFinder to detect stars
-daofind = DAOStarFinder(fwhm=10.0, threshold=1*std)#(fwhm=20.0, threshold=1.0*std)
+daofind = DAOStarFinder(fwhm=5.0, threshold=4*std)#(fwhm=20.0, threshold=1.0*std)
 sources = daofind(image - median)
 
 x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
 
 
+##this is just needed for sn2010ev
+ny, nx = (image).shape
+x0, y0 = nx/2, ny/2
+d = np.hypot(x_coords - x0, y_coords - y0)
+remove_idx = np.argmin(d)
 
-print("Found ", len(x_coords), " sources!\n")
+x_coords = np.delete(x_coords, remove_idx)
+y_coords = np.delete(y_coords, remove_idx)
+
+print("Warning! Removing centermost star (for sn2010ev). Undo this for other SNe")
+
+##
+
+list(zip(x_coords, y_coords))
+sources=list(zip(x_coords, y_coords))
+
+sources = [[int(x) for x in row] for row in sources]
+star_coords=np.array(sources)
 
 
-
-lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
-plt.scatter(x_coords, y_coords, s=50, edgecolor='red', facecolor='none', label="Detected Sources")
-plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("DATA/"+SN_name+"/"+"all-detected-sources.pdf", bbox_inches='tight')
-plt.close()
-
+# the following aimed to find mw stars from gaia cross matching
+"""
 # Checking whether the sources are in Gaia catalogue
 wcs = WCS(data[1].header) 
 
@@ -143,7 +153,7 @@ star_coords=np.array(stars_data[['x', 'y']].values)"""
 
 ## running the script to get star coords from hosphot
 
-import mwstars
+"""import mwstars
 
 x, y = mwstars.return_matched_MW_stars(file_name,SN_name,z,ra,dec)
 star_coords = np.column_stack((x.data, y.data))
@@ -154,82 +164,11 @@ i=index
 image = stacked_cube
 
 if image.ndim == 3:
-    image = np.mean(image, axis=-1)
-
-"""mean, median, std = sigma_clipped_stats(image, sigma=20.0)
-
-# using DAOStarFinder to detect stars
-daofind = DAOStarFinder(fwhm=10.0, threshold=1*std)#(fwhm=20.0, threshold=1.0*std)
-sources = daofind(image - median)
-
-x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
-
-
-print("Found ", len(x_coords), " sources!\n")
-
-
-lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
-plt.scatter(x_coords, y_coords, s=50, edgecolor='red', facecolor='none', label="Detected Sources")
-plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("DATA/"+SN_name+"/"+"all-detected-sources.pdf", bbox_inches='tight')
-plt.close()
-
-# Checking whether the sources are in Gaia catalogue
-wcs = WCS(data[1].header) 
-
-center_x=int(x_len/2)
-center_y=int(y_len/2)
-
-ra, dec, _ = wcs.all_pix2world(center_x, center_y, 0, 0)
-
-#print(ra,dec)
+    image = np.mean(image, axis=-1)"""
 
 
 
-list(zip(x_coords, y_coords))
-sources=list(zip(x_coords, y_coords))
-
-sources = [[int(x) for x in row] for row in sources]
-sources=np.array(sources)
-
-
-
-star_ra,star_dec,star_par,star_parer=match_gaia(sources,header,ra,dec)
-
-
-
-
-out=gaia_parameters(star_ra,star_dec)
-
-
-
-ra_hms = Angle(ra, unit=u.deg).to_string(unit=u.hour, sep=':')
-
-
-stars_data = pd.DataFrame({
-    'x': sources[:,0],               # original image x
-    'y': sources[:,1],               # original image y
-    'ra': star_ra,                   # Right Ascension
-    'dec': star_dec,                 # Declination
-    'parallax': out[0],              # Parallax
-    'parallax_err': out[1],          # Parallax error
-    'teff': out[2],                  # Effective temperature
-    'logg':out[3],                   # Surface gravity
-    'met': out[4],                   # Metallicity
-    'mag': out[5]                    # Mean magnitude in g-band
-})
-
-
-stars_data = stars_data.dropna()
-stars_data
-
-
-star_coords=np.array(stars_data[['x', 'y']].values)
-print(star_coords)"""
-
-
-
-#saving output of create_star_mask
+## saving output of create_star_mask
 
 """if os.path.exists("DATA/"+SN_name+"/masked_cube.npy"):
     masked_cube = np.load("DATA/"+SN_name+"/masked_cube.npy")
@@ -239,7 +178,9 @@ else:
     np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
     np.save("DATA/"+SN_name+"/mask.npy", mask)"""
 
-masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
+
+
+masked_cube,mask=create_star_mask(cube, star_coords, radius=10)
 np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
 np.save("DATA/"+SN_name+"/mask.npy", mask)
 
@@ -269,7 +210,7 @@ spec = np.nansum(masked_cube, axis=(1, 2))
 np.save("DATA/"+SN_name+"/whole_masked_cube_spec.npy", spec)
     
 
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/MW-single-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/MW-single-line-measurement.pdf")
 EW_all,ERR_all=out[0][0],out[1][0]
 
 
@@ -278,7 +219,7 @@ EW_all,ERR_all=out[0][0],out[1][0]
 # random subset of spaxels, excluding MW stars
 """subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 spec = np.nansum(subset_cube, axis=1)
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/MW-subset-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/MW-subset-line-measurement.pdf")
 
 ##
 
@@ -290,7 +231,7 @@ SNRs=[]
 for i in range(0,100):
     subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
     spec = np.nansum(subset_cube, axis=1)
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False)
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False)
     EWs.append(out[0][0])
     EW_errs.append(out[1][0])
     
@@ -336,7 +277,7 @@ for size in sizes:
     for i in range(0,50):
         subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
         spec = np.nansum(subset_cube, axis=1)
-        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save=False)
+        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save=False)
         EWs.append(out[0][0])
         EW_errs.append(out[1][0])
             
@@ -415,7 +356,7 @@ masked_cube = np.where(mask, cube, np.nan)
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 
 
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=500,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 ## Isophotes
@@ -498,8 +439,10 @@ plt.close()
 
 #compute spectra inside each isophote
 
-EWs=[]
-EW_errs=[]
+EWs_sum=[]
+EW_errs_sum=[]
+EWs_median=[]
+EW_errs_median=[]
 
 for sma in smas:
     iso = isolist.get_closest(sma)
@@ -518,7 +461,7 @@ for sma in smas:
     spec_ellipse = masked_cube * mask
     spec = np.nansum(spec_ellipse, axis=(1, 2))
     
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
     EWs_sum.append(out[0][0])
     EW_errs_sum.append(out[1][0])
 
@@ -526,7 +469,7 @@ for sma in smas:
     pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
     EWs_median.append(out[0][0])
     EW_errs_median.append(out[1][0])
 
@@ -546,6 +489,8 @@ ax[1].set_ylabel("SNR",fontsize=12)
 plt.savefig("DATA/"+SN_name+"/isophotes_EWs_sum.pdf", bbox_inches='tight')
 plt.close()
 
+final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
+final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 
 # plotting EWs median
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
@@ -560,7 +505,8 @@ ax[1].set_ylabel("SNR",fontsize=12)
 plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
 plt.close()
 
-
+final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
+final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
 
 
 
@@ -587,11 +533,11 @@ else:
             
             subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
             spec = np.nansum(subset_cube, axis=1)
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save=False)
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save=False)
             EWs.append(out[0][0])
             EW_errs.append(out[1][0])
             if size==3366 and i==1:
-                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=500,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
+                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
             
         yy,ybar=weighted_average(EWs,EW_errs)
         weighted_EWs.append(yy)
@@ -620,6 +566,21 @@ plt.close()
 #valor de EW dentro da isophote com maior SNR (com a mediana, com a media) são hlines
 #valor EW obtido dos voronoi bins
 
+## Voronoi binning
+
+import voronoi2
+
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,wave,file_name,SN_name,z,na_rest,mask,target_sn = 200)
+
+plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
+plt.savefig("DATA/"+SN_name+"/"+"EWs_bins.pdf", bbox_inches='tight')
+plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
+plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
+porque dois saves aqui?
+plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
+plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
+plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')
+plt.close()
 
 
 """
@@ -708,14 +669,7 @@ plt.title("EW for each Voronoi bin",fontsize=30)
 
 plt.axhline(y=weighted_mean)
 
-plt.fill_between(
-    x=np.array([0, len(x_pos)]),   # set these to your x-range
-    y1=weighted_mean - weighted_spread,
-    y2=weighted_mean + weighted_spread,
-    color='red',
-    alpha=0.2,
-    label='Mean ± Error'
-)
+plt.fill_between(x=np.array([0, len(x_pos)]),y1=weighted_mean - weighted_spread,y2=weighted_mean + weighted_spread,color='red',alpha=0.2,label='Mean ± Error')
 plt.tick_params(axis='both', which='major', labelsize=30)
 
 
