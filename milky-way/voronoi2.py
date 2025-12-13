@@ -30,7 +30,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     width=70
     region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
     mw_mask=mw_mask[y_center-width:y_center+width,x_center-width:x_center+width]
-    data, new_wave = chop_data_cube(region, wave, wavelength-80, wavelength+80)
+    data, new_wave = chop_data_cube(region, wave, wavelength-100, wavelength+100)
 
 
 
@@ -47,7 +47,6 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     #np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
 
 
-    errcube=np.transpose(errcube, (2, 0, 1)) #this can be optimized
 
 
     i=findWavelengths(new_wave, wavelength)[1]
@@ -155,6 +154,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
         centroids.append(np.average(distances))
 
         #computing EWs
+        aqui
         a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False)
         
         
@@ -167,17 +167,17 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
 
         if a[0]>0.65:
 
-            """auxmask = np.zeros((y_len, x_len), dtype=bool)
+            auxmask = np.zeros((y_len, x_len), dtype=bool)
             auxmask[y_center-width:y_center+width,x_center-width:x_center+width] = mask
             
 
             bin_pixels = cube[:, auxmask]
 
 
-            spectra_of_bin=np.nansum(bin_pixels, axis=1)"""
+            spectra_of_bin=np.nansum(bin_pixels, axis=1)
             
-            aux=[new_wave, spectra_of_bin]
-            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)            
+            aux=[wave, spectra_of_bin]
+            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)        
             
 
 
@@ -191,7 +191,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
 
     ###
     #spectra per bin
-
+    aqui
     """EWs, EW_errs, foo = EW_voronoi_bins(spectra_per_bin, new_wave,wavelength,v=400,plots=True,text=False)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,wavelength,v=400,plots=True)
     """
 

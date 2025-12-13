@@ -302,7 +302,7 @@ plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tigh
 plt.close()"""
 #####
 #can uncomment the following
-"""
+
 ## Kron's ellipse ##
 
 data=np.nansum(cube[index-100:index+100, :, :], axis=0)#cube[index,:,:]
@@ -356,9 +356,18 @@ masked_cube = np.where(mask, cube, np.nan)
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 
-
+aqui
 out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
+
+
+# inspect best kernel size for continuum aqui
+best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+
+# inspect best window aqui
+best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
+
+
 
 ## Isophotes
 
@@ -448,11 +457,7 @@ EW_errs_median=[]
 for sma in smas:
     iso = isolist.get_closest(sma)
 
-    aper=EllipticalAperture(
-            (iso.x0, iso.y0),
-            iso.sma,
-            iso.sma * (1 - iso.eps),
-            theta=iso.pa)
+    aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
 
     mask = aper.to_mask(method='exact').to_image(data.shape)
     mask = mask.astype(bool)
@@ -461,7 +466,8 @@ for sma in smas:
     #sum
     spec_ellipse = masked_cube * mask
     spec = np.nansum(spec_ellipse, axis=(1, 2))
-    
+
+    aqui
     out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
     EWs_sum.append(out[0][0])
     EW_errs_sum.append(out[1][0])
@@ -511,12 +517,12 @@ final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, E
 
 
 
-"""
+
 ####
 
 """
 
-## EWs of subsets of pixels ##
+## EWs of random subsets of pixels ##
 if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
     weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
     weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
@@ -568,6 +574,20 @@ plt.close()
 #valor EW obtido dos voronoi bins
 
 ## Voronoi binning
+y_center=int(y_len/2)
+x_center=int(x_len/2)
+
+width=70
+region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
+mw_mask=mw_mask[y_center-width:y_center+width,x_center-width:x_center+width]
+data, new_wave = chop_data_cube(region, wave, wavelength-100, wavelength+100)
+
+
+if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
+    errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+else:
+    errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
+    np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
 
 import voronoi2
 
@@ -585,6 +605,7 @@ plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')
 plt.close()
 
 
+
 """
 ## Voronoi binning ##
 this y_center need to be defined
@@ -593,15 +614,6 @@ x_center=int(x_center)
 region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
 data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)#could use cube or zoom-in in the center
 
-
-if os.path.exists("errcube.npy"):
-    errcube = np.load("errcube.npy")
-else:
-    errcube = estimate_flux_error(data,new_wave,na_rest,kernel_size=100)
-    np.save("errcube.npy",errcube)
-
-
-errcube=np.transpose(errcube, (2, 0, 1)) #this can be cleaned
 
 
 i=findWavelengths(new_wave, na_rest)[1]
@@ -644,6 +656,7 @@ plt.close()
 
 spectra_per_bin,err_per_bin = apply_voronoi_to_cube(data,errcube,voronoi_bins[1])
 
+aqui
 EWs, EW_errs, SNRs = EW_voronoi_bins(spectra_per_bin, new_wave,na_rest,v=400,plots=True)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,na_rest,v=400,plots=True)
 
 y = np.array(EWs)
