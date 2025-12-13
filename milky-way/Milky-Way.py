@@ -13,7 +13,7 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="SN2010ev"#"SN2010ev"#
+SN_name="SN2010ev"#
 
 if SN_name=="SN2010ev":
     z=0.00921
@@ -301,7 +301,8 @@ plt.legend()
 plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()"""
 #####
-
+#can uncomment the following
+"""
 ## Kron's ellipse ##
 
 data=np.nansum(cube[index-100:index+100, :, :], axis=0)#cube[index,:,:]
@@ -510,7 +511,7 @@ final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, E
 
 
 
-
+"""
 ####
 
 """
@@ -573,10 +574,11 @@ import voronoi2
 centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,wave,file_name,SN_name,z,na_rest,mask,target_sn = 200)
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
-plt.savefig("DATA/"+SN_name+"/"+"EWs_bins.pdf", bbox_inches='tight')
+
+
 plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
 plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
-porque dois saves aqui?
+
 plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
 plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
 plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')

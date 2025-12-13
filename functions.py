@@ -1627,11 +1627,18 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
 
 
         x,y=chop_data(x,y,bound1,bound2)
+
+        
         
         if len(x)==0:
             print("Warning!! no points to interpolate")
         cont = interp(x)
 
+        """
+        if na_rest>6000:
+            vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new aqui halpa=(6562.8+6564.6)/2
+        else:
+            vel=0"""
 
         # estimating continuum error
         cont1 = convolve1d(y_cont, cosine_kernel(int(kernel_size*1.25)), mode='nearest')
@@ -1745,7 +1752,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         average_separation_array.append(nodesep)
         #SNR_array.append(SNR)
 
-
+    
     return EW_array, EW_err_array, average_separation_array#, np.array(SNR_array)
 
 

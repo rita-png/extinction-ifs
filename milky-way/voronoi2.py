@@ -27,8 +27,9 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     y_center=int(y_len/2)
     x_center=int(x_len/2)
 
-    region=cube[:,y_center-70:y_center+70,x_center-70:x_center+70]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
-    mw_mask=mw_mask[y_center-70:y_center+70,x_center-70:x_center+70]
+    width=70
+    region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
+    mw_mask=mw_mask[y_center-width:y_center+width,x_center-width:x_center+width]
     data, new_wave = chop_data_cube(region, wave, wavelength-80, wavelength+80)
 
 
@@ -115,7 +116,6 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     img = data[i]
     binned_img = np.zeros_like(img)
     EWs_map_bins=np.zeros_like(img)
-    velocity_map_bins=np.zeros_like(img)
 
     n_bins = len(pow.bin_capacity) #number of bins
 
@@ -155,14 +155,30 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
         centroids.append(np.average(distances))
 
         #computing EWs
-        a,b,foo,vel=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False)
+        a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False)
+        
+        
         EWs.append(a[0])
         EW_errs.append(b[0])
 
         
 
         EWs_map_bins[mask] = a
-        velocity_map_bins[mask] = vel
+
+        if a[0]>0.65:
+
+            """auxmask = np.zeros((y_len, x_len), dtype=bool)
+            auxmask[y_center-width:y_center+width,x_center-width:x_center+width] = mask
+            
+
+            bin_pixels = cube[:, auxmask]
+
+
+            spectra_of_bin=np.nansum(bin_pixels, axis=1)"""
+            
+            aux=[new_wave, spectra_of_bin]
+            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)            
+            
 
 
 
@@ -208,7 +224,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     ax[0].text(0.02, 0.90, f"Mean uncertainty = {mean_unc:.4f}", ha='left', va='top', transform=plt.gca().transAxes,fontsize=20)
     ax[0].axhline(y=weighted_mean)
     ax[0].fill_between(
-        x=centroids,
+        x=[np.min(centroids), np.max(centroids)],
         y1=weighted_mean - weighted_std_dev,
         y2=weighted_mean + weighted_std_dev,
         color='red',
@@ -254,7 +270,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
     cmap = plt.cm.Blues_r.copy()
     im1 = ax[0].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[0],orientation="horizontal")
+    cbar=fig.colorbar(im1, ax=ax[0],orientation="vertical")
     ax[0].set_title("Original fluxes",fontsize=20)
     ax[0].tick_params(axis='both', which='major', labelsize=20)
     cbar.ax.tick_params(labelsize=20)
@@ -265,18 +281,18 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
     cmap = plt.cm.Blues_r.copy()
     im1 = ax[1].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[1],orientation="horizontal")
+    cbar=fig.colorbar(im1, ax=ax[1],orientation="vertical")
     ax[1].set_title("Voronoi bins, using PowerBin",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[1].tick_params(axis='both', which='major', labelsize=20)
-    cbar.set_label("Median fluxe inside bin", fontsize=20)
+    cbar.set_label("Median flux inside bin", fontsize=20)
     ax[1].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
 
     image = EWs_map_bins
     lo, up = np.nanpercentile(image, 4), np.nanpercentile(image, 96)
     cmap = plt.cm.Blues_r.copy()
     im1 = ax[2].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[2],orientation="horizontal")
+    cbar=fig.colorbar(im1, ax=ax[2],orientation="vertical")
     ax[2].set_title("EW in each bin",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[2].tick_params(axis='both', which='major', labelsize=20)
@@ -289,7 +305,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     #output as single pdf o ew map, o vel map e o fluc original## new
 
     ## plotting the binned image
-    fig, ax = plt.subplots(1, 2, figsize=(30, 8))
+    fig, ax = plt.subplots(1, 2, figsize=(14, 8))
 
     ####
 
@@ -297,7 +313,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
     cmap = plt.cm.Blues_r.copy()
     im1 = ax[0].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[0],orientation="horizontal")
+    cbar=fig.colorbar(im1, ax=ax[0],orientation="horizontal", shrink=0.6)
     ax[0].set_title("Fluxes",fontsize=20)
     ax[0].tick_params(axis='both', which='major', labelsize=20)
     cbar.ax.tick_params(labelsize=20)
@@ -308,41 +324,48 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
     cmap = plt.cm.Blues_r.copy()
     im1 = ax[1].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[1],orientation="horizontal")
+    cbar=fig.colorbar(im1, ax=ax[1],orientation="horizontal", shrink=0.6)
     ax[1].set_title("Voronoi bins",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[1].tick_params(axis='both', which='major', labelsize=20)
     cbar.set_label("Median flux inside bin", fontsize=20)
     ax[1].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
 
+    plt.subplots_adjust(wspace=0.05)
+    
     plt.savefig("DATA/"+SN_name+"/"+"NEW1.pdf", bbox_inches='tight')
     plt.close()#newwww
 
     ## new as well
-    fig, ax = plt.subplots(1, 2, figsize=(30, 8))
+    """plt.figure(figsize=(10, 8)) 
 
     image = EWs_map_bins
     lo, up = np.nanpercentile(image, 4), np.nanpercentile(image, 96)
     cmap = plt.cm.Blues_r.copy()
-    im1 = ax[0].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[0],orientation="horizontal")
-    ax[0].set_title("EW in each bin",fontsize=20)
+    im1 = plt.imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
+    cbar=fig.colorbar(im1, ax=ax[0],orientation="vertical")
+    plt.title("EW in each bin",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
-    ax[0].tick_params(axis='both', which='major', labelsize=20)
+    plt.tick_params(axis='both', which='major', labelsize=20)
     cbar.set_label("EW", fontsize=20)
-    ax[0].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
+    plt.contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)"""
 
+    fig, ax = plt.subplots(figsize=(10, 8))
 
-    image = velocity_map_bins
+    image = EWs_map_bins
     lo, up = np.nanpercentile(image, 4), np.nanpercentile(image, 96)
     cmap = plt.cm.Blues_r.copy()
-    im1 = ax[1].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-    cbar=fig.colorbar(im1, ax=ax[1],orientation="horizontal")
-    ax[1].set_title("Velocity (km/s)",fontsize=20)
+
+    im1 = ax.imshow(image, cmap=cmap, origin='lower', vmin=lo, vmax=up)
+    cbar = fig.colorbar(im1, ax=ax, orientation="vertical")
+
+    ax.set_title("EW in each bin", fontsize=20)
     cbar.ax.tick_params(labelsize=20)
-    ax[1].tick_params(axis='both', which='major', labelsize=20)
-    cbar.set_label("Velocity", fontsize=20)
-    ax[1].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
+    ax.tick_params(axis='both', which='major', labelsize=20)
+    cbar.set_label("EW", fontsize=20)
+    ax.contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
+
+
 
     plt.savefig("DATA/"+SN_name+"/"+"NEW2.pdf", bbox_inches='tight')
     plt.close()#newwww
