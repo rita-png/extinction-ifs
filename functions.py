@@ -33,13 +33,13 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.data import clear_download_cache
 from astropy.coordinates import SkyCoord
 
-from hostphot.utils import plot_fits
+"""from hostphot.utils import plot_fits
 from hostphot.utils import plot_image
 from hostphot.cutouts import download_images
 from hostphot.processing import coadd_images
 from hostphot.processing import masking
 from hostphot.photometry import global_photometry as gp
-
+"""
 import time
 
 
@@ -1729,8 +1729,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         cont = interp(x)
 
         """
+<<<<<<< HEAD
+        if na_rest>6000:
+            vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new halpa=(6562.8+6564.6)/2
+=======
         if wavelength>6000:
             vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new aqui halpa=(6562.8+6564.6)/2
+>>>>>>> 9139a6e750f924e642cfd3b36d08a7c0c1a4625a
         else:
             vel=0"""
 
@@ -1806,7 +1811,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             
             
             plt.plot(x,y,color="black")#,label="Integral Area")
+<<<<<<< HEAD
+            plt.axvline(x=na_rest,label="Na I D",color="Gray")
+            #plt.axvline(x=na_rest-7,label="?",color="Red")
+            
+=======
             plt.axvline(x=wavelength,label="Na I D",color="Gray")
+>>>>>>> 9139a6e750f924e642cfd3b36d08a7c0c1a4625a
             
             plt.yticks(fontsize=25)
             ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
