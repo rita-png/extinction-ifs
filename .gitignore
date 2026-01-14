@@ -13,4 +13,5 @@ milky-way/DATA/
 .ipynb_checkpoints/
 milky-way/.ipynb_checkpoints/
 __pycache__/
+milky-way/__pycache__/
 quickplots.ipynb
