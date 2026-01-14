@@ -10,3 +10,7 @@ species_database.hdf5
 *.npy
 milky-way/images/
 milky-way/DATA/
+.ipynb_checkpoints/
+milky-way/.ipynb_checkpoints/
+__pycache__/
+quickplots.ipynb
