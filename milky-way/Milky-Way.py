@@ -170,16 +170,6 @@ if image.ndim == 3:
 
 ## saving output of create_star_mask
 
-"""if os.path.exists("DATA/"+SN_name+"/masked_cube.npy"):
-    masked_cube = np.load("DATA/"+SN_name+"/masked_cube.npy")
-    mask = np.load("DATA/"+SN_name+"mask.npy")
-else:
-    masked_cube,mask=create_star_mask(cube, star_coords, radius=20)
-    np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
-    np.save("DATA/"+SN_name+"/mask.npy", mask)"""
-
-
-
 masked_cube,mask=create_star_mask(cube, star_coords, radius=10)
 np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
 np.save("DATA/"+SN_name+"/mask.npy", mask)
@@ -302,10 +292,31 @@ plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tigh
 plt.close()"""
 #####
 #can uncomment the following
-"""
-## Kron's ellipse ##
 
-data=np.nansum(cube[index-100:index+100, :, :], axis=0)#cube[index,:,:]
+
+
+### Defining a region for voronoi binning and Isophotes and computing err cube ###
+
+y_center=int(y_len/2)
+x_center=int(x_len/2)
+
+width=70
+region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
+mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
+region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
+
+
+
+
+if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
+    errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+else:
+    errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
+    np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
+
+
+### Kron's ellipse ###
+data=np.nansum(region[index-100:index+100, :, :], axis=0)#cube[index,:,:]
 data = data.astype(np.float32)
 bkg = sep.Background(data)
 data_sub = data - bkg
@@ -339,11 +350,11 @@ a, b, theta = kron_ellipse['a'], kron_ellipse['b'], kron_ellipse['theta']
 
 print(f"Galaxy center: ({x0:.2f}, {y0:.2f}), a={a:.2f}, b={b:.2f}")
 
-kron_factor=1#2.5
+kron_factor=1 #2.5
 
 kron_a, kron_b = a * kron_factor, b * kron_factor
 
-nz, ny, nx = cube.shape
+ny, nx = data.shape
 y, x = np.mgrid[0:ny, 0:nx]
 
 x_rot = (x - x0) * np.cos(theta) + (y - y0) * np.sin(theta)
@@ -351,14 +362,30 @@ y_rot = -(x - x0) * np.sin(theta) + (y - y0) * np.cos(theta)
 
 mask = (x_rot / kron_a)**2 + (y_rot / kron_b)**2 <= 1
 
-masked_cube = np.where(mask, cube, np.nan)
+masked_cube = np.where(mask, region, np.nan)
+masked_err_cube = np.where(mask, errcube, np.nan)
+
+"""print("these should be the same ",np.shape(mask),np.shape(region))
+print(np.shape(region))
+print(np.shape(errcube))
+print(np.shape(masked_cube))
+print(np.shape(masked_err_cube))"""
 
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
+spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
 
-
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,spectra_err_per_bin=spectrum_err,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
+
+
+# inspect best kernel size for continuum aqui
+best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+
+# inspect best window aqui
+best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
+
+
 
 ## Isophotes
 
@@ -448,11 +475,7 @@ EW_errs_median=[]
 for sma in smas:
     iso = isolist.get_closest(sma)
 
-    aper=EllipticalAperture(
-            (iso.x0, iso.y0),
-            iso.sma,
-            iso.sma * (1 - iso.eps),
-            theta=iso.pa)
+    aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
 
     mask = aper.to_mask(method='exact').to_image(data.shape)
     mask = mask.astype(bool)
@@ -461,8 +484,13 @@ for sma in smas:
     #sum
     spec_ellipse = masked_cube * mask
     spec = np.nansum(spec_ellipse, axis=(1, 2))
-    
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+
+    spec_ellipse_err = masked_err_cube * mask
+    spec_err = np.sqrt(np.nansum(spec_ellipse_err**2))
+
+
+
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,spectra_err_per_bin=spec_err,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
     EWs_sum.append(out[0][0])
     EW_errs_sum.append(out[1][0])
 
@@ -511,12 +539,12 @@ final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, E
 
 
 
-"""
+
 ####
 
 """
 
-## EWs of subsets of pixels ##
+## EWs of random subsets of pixels ##
 if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
     weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
     weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
@@ -570,8 +598,7 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,wave,file_name,SN_name,z,na_rest,mask,target_sn = 200)
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 200)
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
@@ -583,97 +610,3 @@ plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isoph
 plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
 plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')
 plt.close()
-
-
-"""
-## Voronoi binning ##
-this y_center need to be defined
-y_center=int(y_center)
-x_center=int(x_center)
-region=cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
-data, new_wave = chop_data_cube(region, wave, na_rest-80, na_rest+80)#could use cube or zoom-in in the center
-
-
-if os.path.exists("errcube.npy"):
-    errcube = np.load("errcube.npy")
-else:
-    errcube = estimate_flux_error(data,new_wave,na_rest,kernel_size=100)
-    np.save("errcube.npy",errcube)
-
-
-errcube=np.transpose(errcube, (2, 0, 1)) #this can be cleaned
-
-
-i=findWavelengths(new_wave, na_rest)[1]
-if os.path.exists("voronoi_bins.npy"):
-    voronoi_bins = np.load("voronoi_bins.npy")
-else:
-    voronoi_bins=voronoi(data[i],errcube[i],target_snr=40,pixel_size=0.2,plots=False,text=True)
-    np.save("voronoi_bins.npy",errcube)
-
-
-
-fig, ax = plt.subplots(1, 2, figsize=(20, 8))
-
-####
-
-image = data[i]
-lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
-cmap = plt.cm.Blues_r.copy()
-im1 = ax[0].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-cbar=fig.colorbar(im1, ax=ax[0])#, orientation="horizontal")
-ax[0].set_title("Original fluxes",fontsize=30)
-ax[0].tick_params(axis='both', which='major', labelsize=30)
-cbar.ax.tick_params(labelsize=30)
-
-
-
-image = voronoi_bins[0]
-lo, up = np.nanpercentile(image, 2), np.nanpercentile(image, 98)
-cmap = plt.cm.Blues_r.copy()
-im1 = ax[1].imshow(image, cmap=cmap, origin='lower', clim=(lo, up))
-cbar=fig.colorbar(im1, ax=ax[1])#, orientation="horizontal")
-ax[1].set_title("Voronoi bins",fontsize=30)
-cbar.ax.tick_params(labelsize=30)
-ax[1].tick_params(axis='both', which='major', labelsize=30)
-
-plt.savefig("Voronoi_bins.pdf", bbox_inches='tight')
-plt.close()
-
-# EW per voronoi bin
-
-spectra_per_bin,err_per_bin = apply_voronoi_to_cube(data,errcube,voronoi_bins[1])
-
-EWs, EW_errs, SNRs = EW_voronoi_bins(spectra_per_bin, new_wave,na_rest,v=400,plots=True)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,na_rest,v=400,plots=True)
-
-y = np.array(EWs)
-sigma = np.array(EW_errs)
-
-w = 1 / sigma**2
-
-weighted_mean = np.sum(w * y) / np.sum(w)
-weighted_std_mean = np.sqrt(1 / np.sum(w))
-weighted_spread = np.sqrt(np.sum(w * (y - weighted_mean)**2) / np.sum(w))
-
-plt.figure(figsize=(14, 6))
-
-x_pos = np.linspace(1, len(EWs),len(EWs))
-
-
-scatter=plt.errorbar(x_pos, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5,zorder=1)
-scatter=plt.scatter(x_pos, EWs, c=SNRs,s=50, edgecolors='black', alpha=1,zorder=2)
-cbar=plt.colorbar(scatter)
-cbar.set_label('SNR', fontsize=30) 
-cbar.ax.tick_params(labelsize=30)
-plt.xlabel("Voronoi bin",fontsize=30)
-plt.ylabel("EW",fontsize=30)
-plt.title("EW for each Voronoi bin",fontsize=30)
-
-plt.axhline(y=weighted_mean)
-
-plt.fill_between(x=np.array([0, len(x_pos)]),y1=weighted_mean - weighted_spread,y2=weighted_mean + weighted_spread,color='red',alpha=0.2,label='Mean ± Error')
-plt.tick_params(axis='both', which='major', labelsize=30)
-
-
-plt.savefig("EWs_bins.pdf", bbox_inches='tight')
-plt.show()"""

@@ -14,7 +14,7 @@ import functions
 importlib.reload(functions)
 from functions import *
 
-def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
+def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wavelength,width,mw_mask,target_sn = 200):
     
 
 
@@ -27,27 +27,30 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     y_center=int(y_len/2)
     x_center=int(x_len/2)
 
-    width=70
-    region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]#cube[:,y_center-100:y_center+100,x_center-100:x_center+100]
+    data = region_chopped_Na
+
+    """width=70
+    region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
     mw_mask=mw_mask[y_center-width:y_center+width,x_center-width:x_center+width]
-    data, new_wave = chop_data_cube(region, wave, wavelength-80, wavelength+80)
-
-
-
-
+    data, new_wave = chop_data_cube(region, wave, wavelength-100, wavelength+100)
 
 
     if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
         errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
     else:
         errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
-        np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
+        np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)"""
+
+    """if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
+        errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+    else:
+        errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
+        np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)"""
 
     #errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
     #np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
 
 
-    errcube=np.transpose(errcube, (2, 0, 1)) #this can be optimized
 
 
     i=findWavelengths(new_wave, wavelength)[1]
@@ -148,14 +151,17 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
 
         """spectra_per_bin.append(np.nansum(bin_pixels, axis=1))
         #err_per_bin.append(np.nansum(bin_pixels_err, axis=1)) """
-        spectra_of_bin=np.nansum(bin_pixels, axis=1)
+        spectra_of_bin=np.nanmedian(bin_pixels, axis=1)#np.nansum(bin_pixels, axis=1)
+        print("ATENCAO, a fazermedian em vez de sum")
+        
+        spectra_of_bin_err = np.sqrt(np.nansum(bin_pixels_err**2))
 
         ys, xs = np.where(mask)
         distances = np.sqrt((xs - center_x)**2 + (ys - center_y)**2)
         centroids.append(np.average(distances))
 
         #computing EWs
-        a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False)
+        a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False)#spectra_err_per_bin=spectra_of_bin_err,v=400,plots=True,text=False)
         
         
         EWs.append(a[0])
@@ -165,19 +171,19 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
 
         EWs_map_bins[mask] = a
 
-        if a[0]>0.65:
+        if a[0]>0.05:
 
-            """auxmask = np.zeros((y_len, x_len), dtype=bool)
+            auxmask = np.zeros((y_len, x_len), dtype=bool)
             auxmask[y_center-width:y_center+width,x_center-width:x_center+width] = mask
             
 
             bin_pixels = cube[:, auxmask]
 
 
-            spectra_of_bin=np.nansum(bin_pixels, axis=1)"""
+            spectra_of_bin=np.nansum(bin_pixels, axis=1)
             
-            aux=[new_wave, spectra_of_bin]
-            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)            
+            aux=[wave, spectra_of_bin]
+            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)        
             
 
 
@@ -191,7 +197,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
 
     ###
     #spectra per bin
-
+    
     """EWs, EW_errs, foo = EW_voronoi_bins(spectra_per_bin, new_wave,wavelength,v=400,plots=True,text=False)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,wavelength,v=400,plots=True)
     """
 
@@ -285,7 +291,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     ax[1].set_title("Voronoi bins, using PowerBin",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[1].tick_params(axis='both', which='major', labelsize=20)
-    cbar.set_label("Median flux inside bin", fontsize=20)
+    cbar.set_label("Sum flux inside bin", fontsize=20)
     ax[1].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
 
     image = EWs_map_bins
@@ -328,7 +334,7 @@ def binning(cube,wave,file_name,SN_name,z,wavelength,mw_mask,target_sn = 200):
     ax[1].set_title("Voronoi bins",fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[1].tick_params(axis='both', which='major', labelsize=20)
-    cbar.set_label("Median flux inside bin", fontsize=20)
+    cbar.set_label("Sum flux inside bin", fontsize=20)
     ax[1].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
 
     plt.subplots_adjust(wspace=0.05)
