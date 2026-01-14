@@ -57,6 +57,99 @@ from photutils.isophote import build_ellipse_model
 from astropy.modeling.models import Gaussian2D
 from photutils.datasets import make_noise_image
 
+def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
+
+    KSs=np.arange(20,300,20)
+
+    EWs=[]
+    SNR_lines=[]
+    EWs_err=[]
+    
+    for ks in KSs:
+        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vel,KS=ks,plots=False)
+
+        SNR_lines.append(out[0][0]/out[1][0])
+        EWs.append(out[0][0])
+        EWs_err.append(out[1][0])
+        
+
+
+    if plots==True:
+        fig, ax = plt.subplots(1, 3, figsize=(20, 8))
+        fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
+
+
+        ax[0].scatter(KSs,EWs)
+        ax[0].set_ylabel("EW",fontsize=15)
+        ax[0].set_xlabel("Continuum kernel size",fontsize=16)
+
+        ax[1].scatter(KSs,EWs_err)
+        ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[1].set_xlabel("Continuum kernel size",fontsize=16)
+
+        ax[2].scatter(KSs,SNR_lines)
+        ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[2].set_xlabel("Continuum kernel size",fontsize=16)
+
+        
+        print("## Saving image with name ", save)
+        plt.savefig(save, bbox_inches='tight')
+        plt.close()
+
+
+    print("best continuum kernel size is ", KSs[np.argmax(SNR_lines)])
+
+
+    return KSs[np.argmax(SNR_lines)]
+
+
+def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
+
+    vels=np.arange(200,800,20)
+
+    EWs=[]
+    SNR_lines=[]
+    EWs_err=[]
+    
+    for vv in vels:
+        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vv,KS=best_KS,plots=False)
+
+        SNR_lines.append(out[0][0]/out[1][0])
+        EWs.append(out[0][0])
+        EWs_err.append(out[1][0])
+        
+
+
+    if plots==True:
+        fig, ax = plt.subplots(1, 3, figsize=(20, 8))
+        fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
+
+
+        ax[0].scatter(vels,EWs)
+        ax[0].set_ylabel("EW",fontsize=15)
+        ax[0].set_xlabel("Continuum kernel size",fontsize=16)
+
+        ax[1].scatter(vels,EWs_err)
+        ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[1].set_xlabel("Continuum kernel size",fontsize=16)
+
+        ax[2].scatter(vels,SNR_lines)
+        ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[2].set_xlabel("Continuum kernel size",fontsize=16)
+
+        
+        print("## Saving image with name ", save)
+        plt.savefig(save, bbox_inches='tight')
+        plt.close()
+
+
+    print("best integration window is ", vels[np.argmax(SNR_lines)])
+
+
+    return vels[np.argmax(SNR_lines)]
+
+
+
 
 def weighted_average(values, errors):
 
@@ -1560,10 +1653,10 @@ def estimate_flux_error(cube,wave,wavelength,kernel_size): #this can be cleaned 
 
         print("--- %s seconds ---" % (time.time() - start_time))
         
-    return errcube
+    return np.transpose(errcube, (2, 0, 1))
 
 
-def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
+def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,plots=True,KS=100,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1575,16 +1668,10 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         data=spectra_per_bin[i,:]
         
         
-        x_chopped,y_chopped=chop_data(wave,data,na_rest-100,na_rest+100)
+        x_chopped,y_chopped=chop_data(wave,data,wavelength-100,wavelength+100)
         
         x,y=x_chopped,y_chopped
         x_cont,y_cont=filterout_peaks(x,y,low=30, high=70,mode="both")#40 60
-        
-
-        
-        
-        
-
 
         # continuum
 
@@ -1603,7 +1690,14 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         nodesep = kernel_size * delta_x  # in Angstroms
 
         # estimating flux errors like in Santiago's paper
-        yerrMUSE=estimate_spec_err(x_cont,y_cont,interp)
+        if spectra_err_per_bin is None:
+            
+            yerrMUSE = estimate_spec_err(x_cont, y_cont, interp)
+        else:
+            print("Warning: using inputted errcube for spectra error")
+            yerrMUSE=spectra_err_per_bin
+
+
         """nodes = np.linspace(np.min(x_cont), np.max(x_cont), N+1)
         fluxnodes = interp(nodes)"""
 
@@ -1612,7 +1706,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         
         #nodesep=(np.max(x_cont)-np.min(x_cont))/N # in Angstroms
 
-        #interp,nodes,fluxnodes=continuum(N,x_cont,y_cont,na_rest)
+        #interp,nodes,fluxnodes=continuum(N,x_cont,y_cont,wavelength)
         
         
 
@@ -1622,8 +1716,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         
 
         
-        bound1=na_rest*(1-v/(3*10**5))
-        bound2=na_rest*(1+v/(3*10**5))
+        bound1=wavelength*(1-v/(3*10**5))
+        bound2=wavelength*(1+v/(3*10**5))
 
 
         x,y=chop_data(x,y,bound1,bound2)
@@ -1635,7 +1729,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         cont = interp(x)
 
         """
-        if na_rest>6000:
+        if wavelength>6000:
             vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new aqui halpa=(6562.8+6564.6)/2
         else:
             vel=0"""
@@ -1647,8 +1741,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         cont2 = convolve1d(y_cont, cosine_kernel(int(kernel_size*0.75)), mode='nearest')
         auxcont2=interp1d(x_cont, cont2, kind='cubic')
 
-        """auxcont1=continuum(int(N*1.25),x_cont,y_cont,na_rest)[0]
-        auxcont2=continuum(int(N*0.75),x_cont,y_cont,na_rest)[0]"""
+        """auxcont1=continuum(int(N*1.25),x_cont,y_cont,wavelength)[0]
+        auxcont2=continuum(int(N*0.75),x_cont,y_cont,wavelength)[0]"""
 
 
 
@@ -1665,6 +1759,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         excess_intensity = (cont-y)/cont
         
         err_f=yerrMUSE
+        print(err_f)
 
         g = interp1d(x, excess_intensity, kind='cubic')
 
@@ -1711,7 +1806,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
             
             
             plt.plot(x,y,color="black")#,label="Integral Area")
-            plt.axvline(x=na_rest,label="Na I D",color="Gray")
+            plt.axvline(x=wavelength,label="Na I D",color="Gray")
             
             plt.yticks(fontsize=25)
             ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
@@ -1748,7 +1843,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, na_rest,v=600,plots=True,KS=100,title
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
 
-        nodesep=(3*10**5)*nodesep/na_rest#converting nodesep in Angstrom to delva_v (in km/s)
+        nodesep=(3*10**5)*nodesep/wavelength#converting nodesep in Angstrom to delva_v (in km/s)
         average_separation_array.append(nodesep)
         #SNR_array.append(SNR)
 
