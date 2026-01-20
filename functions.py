@@ -22,7 +22,7 @@ import pandas as pd
 import sep
 from matplotlib.patches import Ellipse
 
-from astroquery.gaia import Gaia
+#from astroquery.gaia import Gaia
 from photutils.detection import DAOStarFinder
 from astropy.stats import sigma_clipped_stats
 from astropy.coordinates import Angle
@@ -1520,8 +1520,7 @@ def gaia_parameters(matched_ras,matched_decs):
     return parallax_array,parallax_err_array,eff_t_array,surface_g_array,metallicity_array, mean_mag
 
 
-
-def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
+"""def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
     EW_array=[]
     EW_err_array=[]
     SNR_array=[]
@@ -1597,8 +1596,7 @@ def EW_point_sources(cube, sources, wave, na_rest,radius=0,v=600,plots=False):
         #SNR_array.append(SNR)
 
 
-    return EW_array, EW_err_array#, np.array(SNR_array)
-
+    return EW_array, EW_err_array#, np.array(SNR_array)"""
 
 # estimate flux error of just one spec
 
@@ -1708,13 +1706,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
         #interp,nodes,fluxnodes=continuum(N,x_cont,y_cont,wavelength)
         
-        
 
         #################
-        
-
-        
-
         
         bound1=wavelength*(1-v/(3*10**5))
         bound2=wavelength*(1+v/(3*10**5))
@@ -1728,16 +1721,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             print("Warning!! no points to interpolate")
         cont = interp(x)
 
-        """
-<<<<<<< HEAD
-        if na_rest>6000:
-            vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new halpa=(6562.8+6564.6)/2
-=======
-        if wavelength>6000:
-            vel = velocity(x,y,interp,(6562.8+6564.6)/2*(1+0.00921)) #new aqui halpa=(6562.8+6564.6)/2
->>>>>>> 9139a6e750f924e642cfd3b36d08a7c0c1a4625a
-        else:
-            vel=0"""
 
         # estimating continuum error
         cont1 = convolve1d(y_cont, cosine_kernel(int(kernel_size*1.25)), mode='nearest')
@@ -1791,6 +1774,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
         ####
 
+        
+
         if plots or save:
             
             plt.figure(figsize=(10, 8))  
@@ -1798,26 +1783,31 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             if len(titles)!=0:
                 plt.title("Aperture of "+str(titles[i])+" pixels")
             
+
+            # flagging line measurement if there is evident emission
+            if np.any(np.divide(y,cont) > 1.01):
+                plt.text(0.02,0.98, f"Case excluded!", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
+                
+                area_over_continuum=np.nan
+                err=np.nan
+
+                save = save.replace(".pdf", "Excluded.pdf")
+
+
+
             plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
 
             plt.ylabel("Flux", fontsize=30)
             plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=30)
 
-            #plt.scatter(nodes, fluxnodes,label="Nodes continuum",color="black")
-
-            #plt.scatter(x_cont,y_cont,label="Points used to estimate continuum")
+            
             plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
-            #plt.ylim(45,60)
             
             
-            plt.plot(x,y,color="black")#,label="Integral Area")
-<<<<<<< HEAD
-            plt.axvline(x=na_rest,label="Na I D",color="Gray")
-            #plt.axvline(x=na_rest-7,label="?",color="Red")
             
-=======
+            plt.plot(x,y,color="black")
             plt.axvline(x=wavelength,label="Na I D",color="Gray")
->>>>>>> 9139a6e750f924e642cfd3b36d08a7c0c1a4625a
+            
             
             plt.yticks(fontsize=25)
             ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
@@ -1831,7 +1821,12 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             if plots:
                 plt.show()
 
+
+
             if save:
+
+                save = save.replace(".pdf", f"EW={area_over_continuum:.2f}.pdf")
+
                 print("## Saving image with name ", save)
                 plt.savefig(save, bbox_inches='tight')
             

@@ -13,7 +13,7 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="SN2010ev"#
+SN_name="SN2010ev"#"SN2007cq"
 
 if SN_name=="SN2010ev":
     z=0.00921
@@ -193,11 +193,15 @@ plt.close()
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
-print("\nComputing median spectra of all spaxels, excluding MW stars")
+print("\nComputing sum spectra of all spaxels, excluding MW stars")
 
+if os.path.exists("DATA/"+SN_name+"/whole_masked_cube_spec.npy"):
+    spec = np.load("DATA/"+SN_name+"/whole_masked_cube_spec.npy")
+    print("Read the masked cube from a npy file")
 
-spec = np.nansum(masked_cube, axis=(1, 2))
-np.save("DATA/"+SN_name+"/whole_masked_cube_spec.npy", spec)
+else:
+    spec = np.nansum(masked_cube, axis=(1, 2))
+    np.save("DATA/"+SN_name+"/whole_masked_cube_spec.npy", spec)
     
 
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/MW-single-line-measurement.pdf")
@@ -310,6 +314,7 @@ region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+
 
 if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
     errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+    print("Read the error cube from a npy file")
 else:
     errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
     np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
@@ -365,13 +370,6 @@ mask = (x_rot / kron_a)**2 + (y_rot / kron_b)**2 <= 1
 masked_cube = np.where(mask, region, np.nan)
 masked_err_cube = np.where(mask, errcube, np.nan)
 
-"""print("these should be the same ",np.shape(mask),np.shape(region))
-print(np.shape(region))
-print(np.shape(errcube))
-print(np.shape(masked_cube))
-print(np.shape(masked_err_cube))"""
-
-
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
 
@@ -380,10 +378,10 @@ EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
 # inspect best kernel size for continuum aqui
-best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+#best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
 
 # inspect best window aqui
-best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
+#best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
 
 
 
@@ -470,7 +468,7 @@ plt.close()
 EWs_sum=[]
 EW_errs_sum=[]
 EWs_median=[]
-EW_errs_median=[]
+#EW_errs_median=[]
 
 for sma in smas:
     iso = isolist.get_closest(sma)
@@ -495,12 +493,12 @@ for sma in smas:
     EW_errs_sum.append(out[1][0])
 
     #median
-    pix = masked_cube[:, mask]
+    """pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
     out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
     EWs_median.append(out[0][0])
-    EW_errs_median.append(out[1][0])
+    EW_errs_median.append(out[1][0])"""
 
 
 
@@ -521,7 +519,7 @@ plt.close()
 final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 
-# plotting EWs median
+"""# plotting EWs median
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
@@ -532,10 +530,10 @@ ax[1].set_xlabel("Semi major axis",fontsize=12)
 ax[1].set_ylabel("SNR",fontsize=12)
 
 plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
-plt.close()
+plt.close()"""
 
-final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
-final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
+#final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
+#final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
 
 
 
@@ -598,15 +596,15 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 200)
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 1000)#200
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
 
 plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
-plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
+#plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
 
 plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
-plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
+#plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
 plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')
 plt.close()
