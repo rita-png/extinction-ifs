@@ -308,7 +308,9 @@ width=70+40#aquiiii
 #region=cube[:,y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]
 #mw_mask=mask[y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]#aqui
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
-#mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]#aqui
+mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
+
+
 region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
 
 
@@ -381,7 +383,7 @@ EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 # inspect best kernel size for continuum aqui
 
-np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spectrum)))
+#np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spectrum)))
 #best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
 
 # inspect best window aqui
@@ -440,13 +442,15 @@ ax2.set_title('Data')
 
 available_smas = [iso.sma for iso in isolist]
 available_smas = np.array(available_smas, dtype=float)
-available_smas = available_smas[available_smas > 3]
+print("The smas are originally", available_smas)
+available_smas = available_smas[available_smas > 3] #excluding centermost isophots, as they usually have a sma=0
 
-target_values = np.linspace(available_smas[0], available_smas[-1], 15)
+#picking 10 evenly spaced semi-major axis values, snapping each one to the nearest actually available isophote
+target_values = np.linspace(available_smas[0], available_smas[-1], 20)
 smas = np.array([available_smas[np.argmin(np.abs(available_smas - t))] for t in target_values])
 smas = np.unique(smas)
 
-print(smas)
+print("The smas are", smas)
 
 
 for sma in smas:
@@ -468,9 +472,9 @@ plt.close()
 
 
 
-##apagar
 
-fig, ax = plt.subplots()
+#the following is to just output the smas image
+"""fig, ax = plt.subplots()
 
 ax.imshow(data, origin='lower', vmin=lo, vmax=up)
 ax.set_title('Isophotes fit')
@@ -489,9 +493,7 @@ for sma in smas:
 
 plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
 
-plt.close()
-
-##apagar
+plt.close()"""
 
 
 #compute spectra inside each isophote
@@ -500,8 +502,9 @@ EWs_sum=[]
 EW_errs_sum=[]
 EWs_median=[]
 EW_errs_median=[]
-
+k=0
 for sma in smas:
+    k+=1
     iso = isolist.get_closest(sma)
 
     aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
@@ -514,9 +517,11 @@ for sma in smas:
     spec_ellipse = masked_cube * mask
     spec = np.nansum(spec_ellipse, axis=(1, 2))
 
-    spec_ellipse_err = masked_err_cube * mask
+    #spec_ellipse_err = masked_err_cube * mask
     
-
+    if k==1:
+        print("OUTPUTTING SPEC OF SMALLEST SMA")
+        np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
 
 
     out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
@@ -539,6 +544,8 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_sum, yerr=EW_errs_sum, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
 ax[0].set_ylabel("EW",fontsize=12)
+ax[0].set_ylim([0,1])
+ax[1].set_ylim([0,20])
 ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
 ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
 ax[1].set_xlabel("Semi major axis",fontsize=12)
@@ -555,6 +562,8 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
 ax[0].set_ylabel("EW",fontsize=12)
+ax[0].set_ylim([0,1])
+ax[1].set_ylim([0,20])
 ax[0].set_title("EW for spectra inside isophotes, using median of spectra",fontsize=15)
 ax[1].scatter(smas,np.divide(EWs_median,EW_errs_median))
 ax[1].set_xlabel("Semi major axis",fontsize=12)
