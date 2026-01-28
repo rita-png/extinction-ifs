@@ -304,9 +304,11 @@ plt.close()"""
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
-width=70
+width=70+40#aquiiii
+#region=cube[:,y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]
+#mw_mask=mask[y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]#aqui
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
-mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
+#mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]#aqui
 region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
 
 
@@ -371,13 +373,15 @@ masked_cube = np.where(mask, region, np.nan)
 masked_err_cube = np.where(mask, errcube, np.nan)
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
-spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
+#spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
 
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,spectra_err_per_bin=spectrum_err,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
 # inspect best kernel size for continuum aqui
+
+np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spectrum)))
 #best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
 
 # inspect best window aqui
@@ -463,12 +467,39 @@ plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
 plt.close()
 
 
+
+##apagar
+
+fig, ax = plt.subplots()
+
+ax.imshow(data, origin='lower', vmin=lo, vmax=up)
+ax.set_title('Isophotes fit')
+
+available_smas = np.array([iso.sma for iso in isolist], float)
+available_smas = available_smas[available_smas > 3]
+
+target = np.linspace(available_smas[0], available_smas[-1], 15)
+smas = np.unique([available_smas[np.argmin(np.abs(available_smas - t))] for t in target])
+
+for sma in smas:
+    iso = isolist.get_closest(sma)
+    x, y = iso.sampled_coordinates()
+    ax.plot(x, y, color='white')
+
+
+plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+
+plt.close()
+
+##apagar
+
+
 #compute spectra inside each isophote
 
 EWs_sum=[]
 EW_errs_sum=[]
 EWs_median=[]
-#EW_errs_median=[]
+EW_errs_median=[]
 
 for sma in smas:
     iso = isolist.get_closest(sma)
@@ -484,21 +515,21 @@ for sma in smas:
     spec = np.nansum(spec_ellipse, axis=(1, 2))
 
     spec_ellipse_err = masked_err_cube * mask
-    spec_err = np.sqrt(np.nansum(spec_ellipse_err**2))
+    
 
 
 
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,spectra_err_per_bin=spec_err,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
     EWs_sum.append(out[0][0])
     EW_errs_sum.append(out[1][0])
 
     #median
-    """pix = masked_cube[:, mask]
+    pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
     out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
     EWs_median.append(out[0][0])
-    EW_errs_median.append(out[1][0])"""
+    EW_errs_median.append(out[1][0])
 
 
 
@@ -519,7 +550,7 @@ plt.close()
 final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 
-"""# plotting EWs median
+# plotting EWs median
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
@@ -530,7 +561,7 @@ ax[1].set_xlabel("Semi major axis",fontsize=12)
 ax[1].set_ylabel("SNR",fontsize=12)
 
 plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
-plt.close()"""
+plt.close()
 
 #final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
 #final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
@@ -596,7 +627,7 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 1000)#200
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 250)#750 for f/c
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 

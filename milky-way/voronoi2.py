@@ -14,6 +14,8 @@ import functions
 importlib.reload(functions)
 from functions import *
 
+bootstrap=False
+
 def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wavelength,width,mw_mask,target_sn = 200):
     
 
@@ -81,7 +83,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
 
     ###trying out f/c
-    kernel_size=100
+    """kernel_size=100
     start_time = time.time()
 
     new_signal=[]
@@ -125,21 +127,24 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     new_signal = new_signal.ravel()
     new_noise  = new_noise.ravel()
+    signal=new_signal
+    noise=new_noise"""
 
-     
     ###trying out f/c
+
+    
 
     if additive:
         # 1. Additive case: Provide a pre-calculated array of pixel capacities.
         # This is efficient for capacities like (S/N)^2 with Poissonian noise.
-        capacity_spec = (new_signal / new_noise)**2
+        capacity_spec = (signal / noise)**2
 
     else:
         # 2. Non-additive case: Provide a function for custom capacity logic.
         def capacity_spec(index):
             """Calculates (S/N)^2 for a bin from its pixel indices."""
             # Standard S/N formula for uncorrelated noise
-            sn = np.sum(new_signal[index]) / np.sqrt(np.sum(new_noise[index]**2))
+            sn = np.sum(signal[index]) / np.sqrt(np.sum(noise[index]**2))
             
             # Example for correlated noise (see full example file for details):
             # sn /= 1 + 1.07 * np.log10(len(index))
@@ -198,10 +203,9 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         bin_pixels_err = errcube[:, mask]
 
         
-        spectra_of_bin=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")        #
-        
+        spectra_of_bin=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
 
-        spectra_of_bin_err = np.sqrt(np.nansum(bin_pixels_err**2))#bootstrap would go here
+        
 
         ys, xs = np.where(mask)
         distances = np.sqrt((xs - center_x)**2 + (ys - center_y)**2)
@@ -210,9 +214,12 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         bin_y = np.mean(ys)
 
         #computing EWs
-        a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
-
-
+        if bootstrap==True:
+            spectra_of_bin_err  = bootstrap_error_on_sum(bin_pixels)
+            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+        else:
+            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+        
 
         if not np.isnan(a[0]):
             EWs.append(a[0])
@@ -251,7 +258,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     print("Excluded ",k, " bins for including fluxes of the MW stars")
 
-    
+    #np.save("DATA/"+SN_name+"/"+"temp_EW_measurements.npy",np.column_stack((EWs, EW_errs)))
 
     SNRs=np.divide(EWs,EW_errs)
     y = np.array(EWs)
