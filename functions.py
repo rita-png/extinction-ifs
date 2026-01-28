@@ -1094,15 +1094,19 @@ def EW_parametric(x,y,MUSE_err,cont,cont_error,method,plots,fit="Halpha",central
     
     
 
-def error_non_parametric(Delta,cont,sigma_c,g,sigma_f):
+def error_non_parametric(Delta,cont,sigma_c,g,sigma_f,bootstrap=False):
 
     #g==(c-y)/c
     #computing sigma_g
     
     sigma_g=[]
 
-    for i in range(0,len(cont)):
-        sigma_g.append(np.sqrt((sigma_f/cont[i])**2 + (g[i]* sigma_c[i] / cont[i])**2))
+    if bootstrap==False:
+        for i in range(0,len(cont)):
+            sigma_g.append(np.sqrt((sigma_f/cont[i])**2 + (g[i]* sigma_c[i] / cont[i])**2))
+    else:
+        for i in range(0,len(cont)):
+            sigma_g.append(np.sqrt((sigma_f[i]/cont[i])**2 + (g[i]* sigma_c[i] / cont[i])**2))
         
     sum=0
 
@@ -1653,6 +1657,28 @@ def estimate_flux_error(cube,wave,wavelength,kernel_size): #this can be cleaned 
         
     return np.transpose(errcube, (2, 0, 1))
 
+## bootstrap ##
+
+
+def bootstrap_error_on_sum(flux, n_boot=1000, seed=None):
+    """
+    flux is shape (n_wavelengths, n_pixels)
+    returns: error on summed spectrum, shape (n_wavelengths,)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    n_wave, n_pix = flux.shape
+    print("bootstraping, n_wave, n_pix is", n_wave, n_pix)
+    boot_sums = np.empty((n_boot, n_wave))
+
+    for b in range(n_boot):
+        idx = np.random.randint(0, n_pix, n_pix)
+        boot_sums[b] = np.nansum(flux[:, idx], axis=1)
+
+    return np.nanstd(boot_sums, axis=0, ddof=1)
+
+
 
 def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,plots=True,KS=100,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
@@ -1747,7 +1773,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         excess_intensity = (cont-y)/cont
         
         err_f=yerrMUSE
-        print(err_f)
+        #print(err_f)
 
         g = interp1d(x, excess_intensity, kind='cubic')
 
@@ -1769,7 +1795,12 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         area_over_continuum3 = trapezoid(excess_intensity3, x3)
 
         # Compute uncertainty
-        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f)        
+        if spectra_err_per_bin is None:
+            bootstrap=False
+        else:
+            bootstrap=True
+
+        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f,bootstrap)        
         err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
 
         ####
