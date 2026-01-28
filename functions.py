@@ -59,7 +59,7 @@ from photutils.datasets import make_noise_image
 
 def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
 
-    KSs=np.arange(20,300,20)
+    KSs=np.arange(20,200,10)
 
     EWs=[]
     SNR_lines=[]
@@ -73,23 +73,29 @@ def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
         EWs_err.append(out[1][0])
         
 
-
+    
     if plots==True:
+        delta_x = np.average(np.diff(wave))
+        v_seps = get_velocity_separation(KSs, delta_x, wavelength)
+
         fig, ax = plt.subplots(1, 3, figsize=(20, 8))
         fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
 
 
-        ax[0].scatter(KSs,EWs)
+        ax[0].scatter(v_seps,EWs,color="black")
+        ax[0].plot(v_seps,EWs,color="black",alpha=0.5)
         ax[0].set_ylabel("EW",fontsize=15)
-        ax[0].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[0].set_xlabel("Node Separation (km/s)",fontsize=16)
 
-        ax[1].scatter(KSs,EWs_err)
+        ax[1].scatter(KSs,EWs_err,color="black")
+        ax[1].plot(KSs,EWs_err,color="black",alpha=0.5)
         ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
-        ax[1].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[1].set_xlabel("Node Separation (km/s)",fontsize=16)#used to be Continuum kernel size
 
-        ax[2].scatter(KSs,SNR_lines)
+        ax[2].scatter(KSs,SNR_lines,color="black")
+        ax[2].plot(KSs,SNR_lines,color="black",alpha=0.5)
         ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
-        ax[2].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[2].set_xlabel("Node Separation (km/s)",fontsize=16)
 
         
         print("## Saving image with name ", save)
@@ -102,10 +108,28 @@ def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
 
     return KSs[np.argmax(SNR_lines)]
 
+import numpy as np
+
+# convert kernel size (in pixels) to velocity separation (km/s).
+def get_velocity_separation(kernel_size, delta_x, lambda_center):
+    
+    #kernel_size is the number of pixels in the kernel
+    #delta_x is the wavelength spacing
+    
+    c = 299792.458
+    
+    delta_lambda = kernel_size * delta_x
+    
+    # doppler
+    v_sep = (delta_lambda / lambda_center) * c
+    
+    return v_sep
+
+
 
 def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
 
-    vels=np.arange(200,800,20)
+    vels=np.arange(200,800,10)
 
     EWs=[]
     SNR_lines=[]
@@ -125,17 +149,20 @@ def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
         fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
 
 
-        ax[0].scatter(vels,EWs)
+        ax[0].scatter(vels,EWs,color="black")
+        ax[0].plot(vels,EWs,alpha=0.5,color="black")
         ax[0].set_ylabel("EW",fontsize=15)
-        ax[0].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[0].set_xlabel("Integration window (km/s)",fontsize=16)
 
-        ax[1].scatter(vels,EWs_err)
+        ax[1].scatter(vels,EWs_err,color="black")
+        ax[1].plot(vels,EWs_err,alpha=0.5,color="black")
         ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
-        ax[1].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[1].set_xlabel("Integration window (km/s)",fontsize=16)
 
-        ax[2].scatter(vels,SNR_lines)
+        ax[2].scatter(vels,SNR_lines,color="black")
+        ax[2].plot(vels,SNR_lines,color="black",alpha=0.5)
         ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
-        ax[2].set_xlabel("Continuum kernel size",fontsize=16)
+        ax[2].set_xlabel("Integration window (km/s)",fontsize=16)
 
         
         print("## Saving image with name ", save)
@@ -1695,7 +1722,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         x_chopped,y_chopped=chop_data(wave,data,wavelength-100,wavelength+100)
         
         x,y=x_chopped,y_chopped
-        x_cont,y_cont=filterout_peaks(x,y,low=30, high=70,mode="both")#40 60
+        x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
 
         # continuum
 
@@ -1833,7 +1860,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
             
             plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
-            
             
             
             plt.plot(x,y,color="black")
