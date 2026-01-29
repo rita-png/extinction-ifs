@@ -13,7 +13,8 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="SN2010ev"#"SN2007cq"
+SN_name="ASASSN-14ad"#"SN2010ev"#"SN2007cq"
+
 
 if SN_name=="SN2010ev":
     z=0.00921
@@ -24,6 +25,9 @@ elif SN_name=="SN2007cq":
 elif SN_name=="SN2007bm":
     z=0.006298
     ra, dec= 171.26039,	-9.795445
+if SN_name=="ASASSN-14ad":
+    ra, dev=190.04742	18.061644
+    z = 0.026464
 
 file_name="DATA/"+SN_name+"/"+SN_name+".fits"
 
@@ -304,9 +308,7 @@ plt.close()"""
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
-width=70+40#aquiiii
-#region=cube[:,y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]
-#mw_mask=mask[y_center-width+10:y_center+width+40,x_center-width+10:x_center+width+10]#aqui
+width=70
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
 mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
 
@@ -381,15 +383,12 @@ out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,s
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
-# inspect best kernel size for continuum aqui
+# inspect best kernel size for continuum
 
-#np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spectrum)))
-#best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
 
-# inspect best window aqui
-#best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
-
-
+# inspect best window
+best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
 
 ## Isophotes
 
@@ -445,8 +444,8 @@ available_smas = np.array(available_smas, dtype=float)
 print("The smas are originally", available_smas)
 available_smas = available_smas[available_smas > 3] #excluding centermost isophots, as they usually have a sma=0
 
-#picking 10 evenly spaced semi-major axis values, snapping each one to the nearest actually available isophote
-target_values = np.linspace(available_smas[0], available_smas[-1], 20)
+#picking 30 evenly spaced semi-major axis values, snapping each one to the nearest actually available isophote
+target_values = np.linspace(available_smas[0], available_smas[-1], 30)
 smas = np.array([available_smas[np.argmin(np.abs(available_smas - t))] for t in target_values])
 smas = np.unique(smas)
 
@@ -524,7 +523,7 @@ for sma in smas:
         np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
 
 
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
     EWs_sum.append(out[0][0])
     EW_errs_sum.append(out[1][0])
 
@@ -532,20 +531,28 @@ for sma in smas:
     pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
     EWs_median.append(out[0][0])
     EW_errs_median.append(out[1][0])
 
 
 
 
+
+
 # plotting EWs sum
+y = np.array(EWs_sum)
+w = 1 / np.array(EW_errs_sum)**2
+weighted_mean = np.nansum(w * y) / np.nansum(w)
+weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_sum, yerr=EW_errs_sum, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
 ax[0].set_ylabel("EW",fontsize=12)
 ax[0].set_ylim([0,1])
 ax[1].set_ylim([0,20])
+ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
 ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
 ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
 ax[1].set_xlabel("Semi major axis",fontsize=12)
@@ -558,12 +565,18 @@ final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
 
 # plotting EWs median
+y = np.array(EWs_median)
+w = 1 / np.array(EW_errs_median)**2
+weighted_mean = np.nansum(w * y) / np.nansum(w)
+weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+
 fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
 ax[0].set_xlabel("Semi major axis",fontsize=12)
 ax[0].set_ylabel("EW",fontsize=12)
 ax[0].set_ylim([0,1])
 ax[1].set_ylim([0,20])
+ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
 ax[0].set_title("EW for spectra inside isophotes, using median of spectra",fontsize=15)
 ax[1].scatter(smas,np.divide(EWs_median,EW_errs_median))
 ax[1].set_xlabel("Semi major axis",fontsize=12)
@@ -600,11 +613,11 @@ else:
             
             subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
             spec = np.nansum(subset_cube, axis=1)
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save=False)
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=False)
             EWs.append(out[0][0])
             EW_errs.append(out[1][0])
             if size==3366 and i==1:
-                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
+                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
             
         yy,ybar=weighted_average(EWs,EW_errs)
         weighted_EWs.append(yy)
