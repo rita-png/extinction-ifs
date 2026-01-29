@@ -87,13 +87,13 @@ def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
         ax[0].set_ylabel("EW",fontsize=15)
         ax[0].set_xlabel("Node Separation (km/s)",fontsize=16)
 
-        ax[1].scatter(KSs,EWs_err,color="black")
-        ax[1].plot(KSs,EWs_err,color="black",alpha=0.5)
+        ax[1].scatter(v_seps,EWs_err,color="black")
+        ax[1].plot(v_seps,EWs_err,color="black",alpha=0.5)
         ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
         ax[1].set_xlabel("Node Separation (km/s)",fontsize=16)#used to be Continuum kernel size
 
-        ax[2].scatter(KSs,SNR_lines,color="black")
-        ax[2].plot(KSs,SNR_lines,color="black",alpha=0.5)
+        ax[2].scatter(v_seps,SNR_lines,color="black")
+        ax[2].plot(v_seps,SNR_lines,color="black",alpha=0.5)
         ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
         ax[2].set_xlabel("Node Separation (km/s)",fontsize=16)
 
