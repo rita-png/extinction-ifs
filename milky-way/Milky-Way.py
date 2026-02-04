@@ -13,7 +13,7 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="ASASSN-14ad"#"SN2010ev"#"SN2007cq"
+SN_name="CSP13aao"#"ASASSN-14ad"#"SN2010ev"#"SN2007cq"
 
 
 if SN_name=="SN2010ev":
@@ -26,8 +26,11 @@ elif SN_name=="SN2007bm":
     z=0.006298
     ra, dec= 171.26039,	-9.795445
 if SN_name=="ASASSN-14ad":
-    ra, dev=190.04742	18.061644
-    z = 0.026464
+    ra, dev=190.04742,	18.061644
+    z = 0.0264#0.026464
+if SN_name=="CSP13aao":
+    ra,dec=89.626465,	-63.560677
+    z = 0.061486
 
 file_name="DATA/"+SN_name+"/"+SN_name+".fits"
 
@@ -60,7 +63,7 @@ index=findWavelengths(wave, na_rest)[1]
 
 
 
-stacked_cube=np.nansum(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##why the following?
+stacked_cube=np.nanmedian(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##i was doing sum
 
 
 i=index
@@ -76,8 +79,13 @@ mean, median, std = sigma_clipped_stats(image, sigma=3.0)
 daofind = DAOStarFinder(fwhm=5.0, threshold=4*std)#(fwhm=20.0, threshold=1.0*std)
 sources = daofind(image - median)
 
-x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
 
+# filter by compactness
+sources = sources[sources['peak'] / sources['npix'] > 1]
+
+
+x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
+print("We have detected ", len(sources)," sources!")
 
 ##this is just needed for sn2010ev
 ny, nx = (image).shape
@@ -503,7 +511,7 @@ EWs_median=[]
 EW_errs_median=[]
 k=0
 for sma in smas:
-    k+=1
+    
     iso = isolist.get_closest(sma)
 
     aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
@@ -518,22 +526,30 @@ for sma in smas:
 
     #spec_ellipse_err = masked_err_cube * mask
     
-    if k==1:
-        print("OUTPUTTING SPEC OF SMALLEST SMA")
-        np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
+    
 
+    if np.any(np.isnan(spec[index-100:index+100])):
+        print("Spectrum is empty / all NaNs, skipping")
+    else:
+        k+=1
+        if k==1:
+            print("OUTPUTTING SPEC OF SMALLEST SMA")
+            np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
 
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
-    EWs_sum.append(out[0][0])
-    EW_errs_sum.append(out[1][0])
+        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+        EWs_sum.append(out[0][0])
+        EW_errs_sum.append(out[1][0])
 
     #median
     pix = masked_cube[:, mask]
     spec = np.nanmedian(pix, axis=1)
     
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
-    EWs_median.append(out[0][0])
-    EW_errs_median.append(out[1][0])
+    if np.any(np.isnan(spec[index-100:index+100])):
+        print("Spectrum is empty / all NaNs, skipping")
+    else:
+        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+        EWs_median.append(out[0][0])
+        EW_errs_median.append(out[1][0])
 
 
 
@@ -649,7 +665,7 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 250)#750 for f/c
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 50)#750 for f/c#250
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
