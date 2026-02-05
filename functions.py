@@ -1843,13 +1843,14 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             
 
             # flagging line measurement if there is evident emission
-            if np.any(np.divide(y,cont) > 1.01):
+            """if np.any(np.divide(y,cont) > 1.01):
+            #if np.any(np.divide(y,cont) > sigma_f):
                 plt.text(0.02,0.98, f"Case excluded!", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
                 
                 area_over_continuum=np.nan
                 err=np.nan
 
-                save = save.replace(".pdf", "Excluded.pdf")
+                save = save.replace(".pdf", "Excluded.pdf")"""
 
 
 

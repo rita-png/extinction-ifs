@@ -80,7 +80,17 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     print(signal.shape)
     print(noise.shape)
 
+    snr = signal / noise
+    snr_total = np.sqrt(np.sum((signal / noise)**2))
 
+    target_sn = snr_total/np.sqrt(150) #scaling to have approx. 200 bins
+    print("The target SNR is ", target_sn)
+
+    plt.hist(snr, bins=50, edgecolor='black')
+    plt.xlabel("SNR")
+    plt.ylabel("Frequency")
+    plt.show()
+    plt.savefig("DATA/"+SN_name+"/"+"temp_histogram.pdf", bbox_inches='tight')
 
     ###trying out f/c
     """kernel_size=100
@@ -187,11 +197,16 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     center_x = nx / 2
 
     k=0
+
+    ####bin_fluxes = np.full(n_bins, np.nan)
+    ####bins_used = []
+
     for b in range(n_bins):
         mask = (bin_map == b)
 
         #just 2d image of wavelength of the absorption line
         binned_img[mask] = np.median(img[mask])
+        ####bin_fluxes[b] = np.median(img[mask])
 
 
         #binning the spectra ONLY in bins that do not include MW stars
@@ -216,6 +231,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         #computing EWs
         if bootstrap==True:
             spectra_of_bin_err  = bootstrap_error_on_sum(bin_pixels)
+            aqui tenho de usar bestwindow e best conitnuum
             a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
         else:
             a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
@@ -225,6 +241,8 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
             EWs.append(a[0])
             EW_errs.append(b[0])
             centroids.append(dist)
+            ####bins_used.append(b)
+
         else:
             print("Detected emission in wavelength of the absorption line!")
 
@@ -248,9 +266,11 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
             
 
 
+    
 
     EWs=np.asarray(EWs)
     EW_errs=np.asarray(EW_errs)
+    centroids = np.array(centroids)
     EWs, EW_errs = EWs[~np.isnan(EWs)], EW_errs[~np.isnan(EW_errs)]
 
 
@@ -258,12 +278,36 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     print("Excluded ",k, " bins for including fluxes of the MW stars")
 
+    # excluding bins with low flux
+    """flux_thresh = 0.5 * np.nanmedian(bin_fluxes)
+    bins_used = np.asarray(bins_used, dtype=int)
+    good = bin_fluxes[bins_used] >= flux_thresh
+    EWs = EWs[good]
+    EW_errs = EW_errs[good]
+    centroids = centroids[good]"""
+
+
+
     #np.save("DATA/"+SN_name+"/"+"temp_EW_measurements.npy",np.column_stack((EWs, EW_errs)))
 
     SNRs=np.divide(EWs,EW_errs)
+    
+
+
+    # excluding bins with SNR<0
+    temp=len(EWs)
+    good = (SNRs > 0)
+    
+    EWs = EWs[good]
+    EW_errs = EW_errs[good]
+    SNRs = SNRs[good]
+    centroids = centroids[good]
+
+    if temp!=len(EWs):
+        print("Excluded ",  temp-len(EWs)," bins for having SNR<0")
+
     y = np.array(EWs)
     sigma = np.array(EW_errs)
-
     w = 1 / sigma**2
 
     weighted_mean = np.sum(w * y) / np.sum(w)
