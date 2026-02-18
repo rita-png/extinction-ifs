@@ -13,34 +13,46 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="CSP13aao"#"ASASSN-14ad"#"SN2010ev"#"SN2007cq"
+SN_name="CSP14aaq"#"SN2007cq"#"ASASSN-14ad"#
 
+isophotes=True
 
+#potassium is 7665
 if SN_name=="SN2010ev":
     z=0.00921
     ra, dec = 156.370792, -39.830889
+    #target_snr = 250
 elif SN_name=="SN2007cq":
     z=0.026018
     ra, dec = 333.66965, 5.078526
 elif SN_name=="SN2007bm":
     z=0.006298
     ra, dec= 171.26039,	-9.795445
-if SN_name=="ASASSN-14ad":
+elif SN_name=="ASASSN-14ad":
     ra, dev=190.04742,	18.061644
     z = 0.0264#0.026464
-if SN_name=="CSP13aao":
-    ra,dec=89.626465,	-63.560677
+    #target_snr = 150
+elif SN_name=="CSP13aao":
+    ra,dec=89.626465,-63.560677
     z = 0.061486
+elif SN_name=="CSP13abl":#not analysed yet
+    ra,dec=99.530464,-75.72468
+    z=	0.040006
+elif SN_name=="CSP14aaq":
+    ra,dec=93.45008,-67.920715
+    z=0.036518
+elif SN_name=="LSQ12ca":
+    ra,dec=82.765114,	-19.801537
+    z=0.098752
 
 file_name="DATA/"+SN_name+"/"+SN_name+".fits"
 
 
 data = fits.open(file_name)
 cube = data[1].data   # this is the cube, a (3681 x 341 x 604) matrix with fluxes at different 3681 wavelengths and 308 x 318 spatial pixels ("spaxels")
+
 header = data[1].header # this has information on the data cube
 ecube = data[2].data # this is the cube uncertainty (3681 x 341 x 604)
-
-
 
 
 x_len=len(cube[0][0])
@@ -64,6 +76,8 @@ index=findWavelengths(wave, na_rest)[1]
 
 
 stacked_cube=np.nanmedian(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##i was doing sum
+#stacked_cube=np.nansum(cube[index-100:index+100, :, :], axis=0)
+#stacked_cube = stacked_cube.astype(np.float32)
 
 
 i=index
@@ -76,12 +90,12 @@ if image.ndim == 3:
 mean, median, std = sigma_clipped_stats(image, sigma=3.0)
 
 # using DAOStarFinder to detect stars
-daofind = DAOStarFinder(fwhm=5.0, threshold=4*std)#(fwhm=20.0, threshold=1.0*std)
+daofind = DAOStarFinder(fwhm=4.0, threshold=7*std)#5, 4
 sources = daofind(image - median)
 
 
 # filter by compactness
-sources = sources[sources['peak'] / sources['npix'] > 1]
+#sources = sources[sources['peak'] / sources['npix'] > 1]
 
 
 x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
@@ -91,12 +105,20 @@ print("We have detected ", len(sources)," sources!")
 ny, nx = (image).shape
 x0, y0 = nx/2, ny/2
 d = np.hypot(x_coords - x0, y_coords - y0)
-remove_idx = np.argmin(d)
+#remove_idx = np.argmin(d)
+r_exclude = 10
 
-x_coords = np.delete(x_coords, remove_idx)
-y_coords = np.delete(y_coords, remove_idx)
+#x_coords = np.delete(x_coords, remove_idx)
+#y_coords = np.delete(y_coords, remove_idx)
 
-print("Warning! Removing centermost star (for sn2010ev). Undo this for other SNe")
+keep = d > r_exclude
+
+x_coords = x_coords[keep]
+y_coords = y_coords[keep]
+
+
+
+print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask as a total of ",np.sum(keep)," masked stars.")
 
 ##
 
@@ -188,20 +210,21 @@ np.save("DATA/"+SN_name+"/mask.npy", mask)
 
 
 
-data=cube[index]
 n_valid_pixels = np.count_nonzero(mask)
 
-ny, nx = data.shape
 print("\nOriginal image had ", ny*nx," pixels, the one after masking MW stars has ", n_valid_pixels)
 
 
-lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
+lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
 plt.contour(mask, levels=[0.5], colors='red', linewidths=1, origin='lower')
-plt.imshow(data,cmap='Blues_r',origin='lower',clim=(lo,up))
+plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
 plt.savefig("DATA/"+SN_name+"/MW-masked-cube.pdf", bbox_inches='tight')
 plt.close()
 
+## background plot
 
+spec = np.nansum(cube[:,50:100,0:25], axis=(1, 2))
+EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/background.pdf")
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
@@ -399,210 +422,210 @@ best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,s
 best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
 
 ## Isophotes
+if isophotes==True:
+    ny, nx = data_sub.shape
+    x0, y0 = nx / 2, ny / 2
 
-ny, nx = data_sub.shape
-x0, y0 = nx / 2, ny / 2
+    def dist(obj):
+        return np.hypot(obj['x'] - x0, obj['y'] - y0)
 
-def dist(obj):
-    return np.hypot(obj['x'] - x0, obj['y'] - y0)
+    closest = min(candidate_galaxies, key=dist)
 
-closest = min(candidate_galaxies, key=dist)
-
-x_center = closest['x']
-y_center = closest['y']
-a        = closest['a']
-b        = closest['b']
-theta    = closest['theta']
-
-
-geometry = EllipseGeometry(x0=x_center, y0=y_center, sma=a, eps=1-b/a,
-                           pa=theta)
-
-aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma,
-                          geometry.sma * (1 - geometry.eps), geometry.pa)
+    x_center = closest['x']
+    y_center = closest['y']
+    a        = closest['a']
+    b        = closest['b']
+    theta    = closest['theta']
 
 
-ellipse = IsoEllipse(data, geometry)
+    geometry = EllipseGeometry(x0=x_center, y0=y_center, sma=a, eps=1-b/a,
+                            pa=theta)
 
-isolist = ellipse.fit_image()
-
-model_image = build_ellipse_model(data.shape, isolist)
-
-residual = data - model_image
-
-# plotting isophotes
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(figsize=(14, 5), nrows=2, ncols=2)
-fig.subplots_adjust(left=0.04, right=0.98, bottom=0.02, top=0.98)
+    aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma,
+                            geometry.sma * (1 - geometry.eps), geometry.pa)
 
 
-lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
-ax1.imshow(data, origin='lower',clim=(lo,up))
+    ellipse = IsoEllipse(data, geometry)
 
-# plotting ellipse with matplotlib
-ell = Ellipse((geometry.x0, geometry.y0), geometry.sma, (geometry.sma * (1 - geometry.eps)), angle=geometry.pa*180/np.pi,
-              edgecolor='white', facecolor='none', linewidth=1.5)
+    isolist = ellipse.fit_image()
 
-ax1.add_patch(ell)
+    model_image = build_ellipse_model(data.shape, isolist)
 
-ax2.imshow(data, origin='lower',clim=(lo,up))
-ax2.set_title('Data')
+    residual = data - model_image
 
-available_smas = [iso.sma for iso in isolist]
-available_smas = np.array(available_smas, dtype=float)
-print("The smas are originally", available_smas)
-available_smas = available_smas[available_smas > 3] #excluding centermost isophots, as they usually have a sma=0
-
-#picking 30 evenly spaced semi-major axis values, snapping each one to the nearest actually available isophote
-target_values = np.linspace(available_smas[0], available_smas[-1], 30)
-smas = np.array([available_smas[np.argmin(np.abs(available_smas - t))] for t in target_values])
-smas = np.unique(smas)
-
-print("The smas are", smas)
+    # plotting isophotes
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(figsize=(14, 5), nrows=2, ncols=2)
+    fig.subplots_adjust(left=0.04, right=0.98, bottom=0.02, top=0.98)
 
 
-for sma in smas:
-    iso = isolist.get_closest(sma)
-    x, y, = iso.sampled_coordinates()
-    ax2.plot(x, y, color='white')
+    lo,up = np.nanpercentile(data,2),np.nanpercentile(data,98)
+    ax1.imshow(data, origin='lower',clim=(lo,up))
 
-lo,up = np.nanpercentile(model_image,2),np.nanpercentile(model_image,98)
-ax3.imshow(model_image, origin='lower',clim=(lo,up))
-ax3.set_title('Ellipse Model')
+    # plotting ellipse with matplotlib
+    ell = Ellipse((geometry.x0, geometry.y0), geometry.sma, (geometry.sma * (1 - geometry.eps)), angle=geometry.pa*180/np.pi,
+                edgecolor='white', facecolor='none', linewidth=1.5)
 
-lo,up = np.nanpercentile(residual,2),np.nanpercentile(residual,98)
-ax4.imshow(residual, origin='lower',clim=(lo,up))
-ax4.set_title('Residual')
+    ax1.add_patch(ell)
 
-plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+    ax2.imshow(data, origin='lower',clim=(lo,up))
+    ax2.set_title('Data')
 
-plt.close()
+    available_smas = [iso.sma for iso in isolist]
+    available_smas = np.array(available_smas, dtype=float)
+    print("The smas are originally", available_smas)
+    available_smas = available_smas[available_smas > 3] #excluding centermost isophots, as they usually have a sma=0
 
+    #picking 30 evenly spaced semi-major axis values, snapping each one to the nearest actually available isophote
+    target_values = np.linspace(available_smas[0], available_smas[-1], 30)
+    smas = np.array([available_smas[np.argmin(np.abs(available_smas - t))] for t in target_values])
+    smas = np.unique(smas)
 
-
-
-#the following is to just output the smas image
-"""fig, ax = plt.subplots()
-
-ax.imshow(data, origin='lower', vmin=lo, vmax=up)
-ax.set_title('Isophotes fit')
-
-available_smas = np.array([iso.sma for iso in isolist], float)
-available_smas = available_smas[available_smas > 3]
-
-target = np.linspace(available_smas[0], available_smas[-1], 15)
-smas = np.unique([available_smas[np.argmin(np.abs(available_smas - t))] for t in target])
-
-for sma in smas:
-    iso = isolist.get_closest(sma)
-    x, y = iso.sampled_coordinates()
-    ax.plot(x, y, color='white')
+    print("The smas are", smas)
 
 
-plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+    for sma in smas:
+        iso = isolist.get_closest(sma)
+        x, y, = iso.sampled_coordinates()
+        ax2.plot(x, y, color='white')
 
-plt.close()"""
+    lo,up = np.nanpercentile(model_image,2),np.nanpercentile(model_image,98)
+    ax3.imshow(model_image, origin='lower',clim=(lo,up))
+    ax3.set_title('Ellipse Model')
 
+    lo,up = np.nanpercentile(residual,2),np.nanpercentile(residual,98)
+    ax4.imshow(residual, origin='lower',clim=(lo,up))
+    ax4.set_title('Residual')
 
-#compute spectra inside each isophote
+    plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
 
-EWs_sum=[]
-EW_errs_sum=[]
-EWs_median=[]
-EW_errs_median=[]
-k=0
-for sma in smas:
-    
-    iso = isolist.get_closest(sma)
-
-    aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
-
-    mask = aper.to_mask(method='exact').to_image(data.shape)
-    mask = mask.astype(bool)
-    #spec_ellipse = cube * mask
-
-    #sum
-    spec_ellipse = masked_cube * mask
-    spec = np.nansum(spec_ellipse, axis=(1, 2))
-
-    #spec_ellipse_err = masked_err_cube * mask
-    
-    
-
-    if np.any(np.isnan(spec[index-100:index+100])):
-        print("Spectrum is empty / all NaNs, skipping")
-    else:
-        k+=1
-        if k==1:
-            print("OUTPUTTING SPEC OF SMALLEST SMA")
-            np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
-
-        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
-        EWs_sum.append(out[0][0])
-        EW_errs_sum.append(out[1][0])
-
-    #median
-    pix = masked_cube[:, mask]
-    spec = np.nanmedian(pix, axis=1)
-    
-    if np.any(np.isnan(spec[index-100:index+100])):
-        print("Spectrum is empty / all NaNs, skipping")
-    else:
-        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
-        EWs_median.append(out[0][0])
-        EW_errs_median.append(out[1][0])
+    plt.close()
 
 
 
 
+    #the following is to just output the smas image
+    """fig, ax = plt.subplots()
+
+    ax.imshow(data, origin='lower', vmin=lo, vmax=up)
+    ax.set_title('Isophotes fit')
+
+    available_smas = np.array([iso.sma for iso in isolist], float)
+    available_smas = available_smas[available_smas > 3]
+
+    target = np.linspace(available_smas[0], available_smas[-1], 15)
+    smas = np.unique([available_smas[np.argmin(np.abs(available_smas - t))] for t in target])
+
+    for sma in smas:
+        iso = isolist.get_closest(sma)
+        x, y = iso.sampled_coordinates()
+        ax.plot(x, y, color='white')
 
 
-# plotting EWs sum
-y = np.array(EWs_sum)
-w = 1 / np.array(EW_errs_sum)**2
-weighted_mean = np.nansum(w * y) / np.nansum(w)
-weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+    plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
 
-fig, ax = plt.subplots(1, 2, figsize=(20, 8))
-ax[0].errorbar(smas,EWs_sum, yerr=EW_errs_sum, fmt='o', c='Blue', capsize=5,zorder=1)
-ax[0].set_xlabel("Semi major axis",fontsize=12)
-ax[0].set_ylabel("EW",fontsize=12)
-ax[0].set_ylim([0,1])
-ax[1].set_ylim([0,20])
-ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
-ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
-ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
-ax[1].set_xlabel("Semi major axis",fontsize=12)
-ax[1].set_ylabel("SNR",fontsize=12)
+    plt.close()"""
 
-plt.savefig("DATA/"+SN_name+"/isophotes_EWs_sum.pdf", bbox_inches='tight')
-plt.close()
 
-final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
-final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
+    #compute spectra inside each isophote
 
-# plotting EWs median
-y = np.array(EWs_median)
-w = 1 / np.array(EW_errs_median)**2
-weighted_mean = np.nansum(w * y) / np.nansum(w)
-weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+    EWs_sum=[]
+    EW_errs_sum=[]
+    EWs_median=[]
+    EW_errs_median=[]
+    k=0
+    for sma in smas:
+        
+        iso = isolist.get_closest(sma)
 
-fig, ax = plt.subplots(1, 2, figsize=(20, 8))
-ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
-ax[0].set_xlabel("Semi major axis",fontsize=12)
-ax[0].set_ylabel("EW",fontsize=12)
-ax[0].set_ylim([0,1])
-ax[1].set_ylim([0,20])
-ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
-ax[0].set_title("EW for spectra inside isophotes, using median of spectra",fontsize=15)
-ax[1].scatter(smas,np.divide(EWs_median,EW_errs_median))
-ax[1].set_xlabel("Semi major axis",fontsize=12)
-ax[1].set_ylabel("SNR",fontsize=12)
+        aper=EllipticalAperture((iso.x0, iso.y0),iso.sma,iso.sma * (1 - iso.eps),theta=iso.pa)
 
-plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
-plt.close()
+        mask = aper.to_mask(method='exact').to_image(data.shape)
+        mask = mask.astype(bool)
+        #spec_ellipse = cube * mask
 
-#final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
-#final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
+        #sum
+        spec_ellipse = masked_cube * mask
+        spec = np.nansum(spec_ellipse, axis=(1, 2))
+
+        #spec_ellipse_err = masked_err_cube * mask
+        
+        
+
+        if np.any(np.isnan(spec[index-100:index+100])):
+            print("Spectrum is empty / all NaNs, skipping")
+        else:
+            k+=1
+            if k==1:
+                print("OUTPUTTING SPEC OF SMALLEST SMA")
+                np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
+
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+            EWs_sum.append(out[0][0])
+            EW_errs_sum.append(out[1][0])
+
+        #median
+        pix = masked_cube[:, mask]
+        spec = np.nanmedian(pix, axis=1)
+        
+        if np.any(np.isnan(spec[index-100:index+100])):
+            print("Spectrum is empty / all NaNs, skipping")
+        else:
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+            EWs_median.append(out[0][0])
+            EW_errs_median.append(out[1][0])
+
+
+
+
+
+
+    # plotting EWs sum
+    y = np.array(EWs_sum)
+    w = 1 / np.array(EW_errs_sum)**2
+    weighted_mean = np.nansum(w * y) / np.nansum(w)
+    weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+
+    fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+    ax[0].errorbar(smas,EWs_sum, yerr=EW_errs_sum, fmt='o', c='Blue', capsize=5,zorder=1)
+    ax[0].set_xlabel("Semi major axis",fontsize=12)
+    ax[0].set_ylabel("EW",fontsize=12)
+    ax[0].set_ylim([0,1])
+    ax[1].set_ylim([0,20])
+    ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
+    ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
+    ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
+    ax[1].set_xlabel("Semi major axis",fontsize=12)
+    ax[1].set_ylabel("SNR",fontsize=12)
+
+    plt.savefig("DATA/"+SN_name+"/isophotes_EWs_sum.pdf", bbox_inches='tight')
+    plt.close()
+
+    final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
+    final_EW_sum_isophotes_err = EW_errs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
+
+    # plotting EWs median
+    y = np.array(EWs_median)
+    w = 1 / np.array(EW_errs_median)**2
+    weighted_mean = np.nansum(w * y) / np.nansum(w)
+    weighted_std_dev = np.sqrt(np.nansum(w * (y - weighted_mean)**2) / np.nansum(w))
+
+    fig, ax = plt.subplots(1, 2, figsize=(20, 8))
+    ax[0].errorbar(smas,EWs_median, yerr=EW_errs_median, fmt='o', c='Blue', capsize=5,zorder=1)
+    ax[0].set_xlabel("Semi major axis",fontsize=12)
+    ax[0].set_ylabel("EW",fontsize=12)
+    ax[0].set_ylim([0,1])
+    ax[1].set_ylim([0,20])
+    ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
+    ax[0].set_title("EW for spectra inside isophotes, using median of spectra",fontsize=15)
+    ax[1].scatter(smas,np.divide(EWs_median,EW_errs_median))
+    ax[1].set_xlabel("Semi major axis",fontsize=12)
+    ax[1].set_ylabel("SNR",fontsize=12)
+
+    plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
+    plt.close()
+
+    #final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
+    #final_EW_median_isophotes_err = EW_errs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
 
 
 
@@ -665,7 +688,7 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,target_sn = 50)#750 for f/c#250
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask)#,target_sn = target_snr)#750 for f/c#250
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
