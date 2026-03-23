@@ -737,7 +737,7 @@ def three_gaussian_poly(x, c0, c1, A1, sigma1, A2, mu2, sigma2, A3, sigma3,shift
     peak3 = A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return bg + peak1 + peak2 + peak3
 
-def two_gaussian_poly(x, c0, c1, A1, mu1, sigma1, A2, mu2,sigma2,shift):
+"""def two_gaussian_poly(x, c0, c1, A1, mu1, sigma1, A2,sigma2,shift):
     bg =  background(x,c0,c1)
     
     mu2=mu1+shift
@@ -752,7 +752,26 @@ def two_gaussian_poly_nobg(x, A1, mu1, sigma1, A2, mu2,sigma2,shift=4.5):
     peak1 = A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2))
     peak2 = A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
 
-    return peak1 + peak2
+    return peak1 + peak2"""
+
+## fitting Na i Doublet assuming emission at the same wavelength
+
+def two_gaussian_emission(x, A1, mu1, sigma1, A2,shift,A3,sigma3):
+     
+    mu2=mu1+shift
+    sigma2=sigma1
+    peak1 = gaussian(x,A1,mu1,sigma1) #A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2)) 
+    peak2 = gaussian(x,A2,mu2,sigma2) #A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
+    emissionpeak = gaussian(x,np.sqrt(A3**2),5893,sigma3) #A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
+
+    return peak1 + peak2 + emissionpeak
+
+"""options are:
+- A1,mu1,sigma1,A2,mu2,sigma2,A3,mu3,sigma3 all free, mu3 fixed
+- A1,mu1,sigma1,A2,mu2,sigma2,A3,sigma3 all free, mu3, sigma2=sigma1 fixed
+- A1,mu1,sigma1,A2,mu2,A3,sigma3 all free, mu3, sigma2=sigma1=FWHM fixed
+- A1,sigma1,A2,sigma2,A3,sigma3 all free, mu3, sigma2=sigma1 fixed"""
+
 
 
 ## chopping data to window view ##
@@ -1836,28 +1855,29 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
         if plots or save:
             
-            plt.figure(figsize=(10, 8))  
+            plt.figure(figsize=(6, 4))#10,8  
             plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
             if len(titles)!=0:
                 plt.title("Aperture of "+str(titles[i])+" pixels")
             
 
             # flagging line measurement if there is evident emission
-            """if np.any(np.divide(y,cont) > 1.01):
+            ######
+            if np.any(np.divide(y,cont) > 1.01):
             #if np.any(np.divide(y,cont) > sigma_f):
                 plt.text(0.02,0.98, f"Case excluded!", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
                 
                 area_over_continuum=np.nan
                 err=np.nan
 
-                save = save.replace(".pdf", "Excluded.pdf")"""
-
+                save = save.replace(".pdf", "Excluded.pdf")
+            ######
 
 
             plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
 
-            plt.ylabel("Flux", fontsize=30)
-            plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=30)
+            plt.ylabel("Flux", fontsize=15)#30
+            plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=15)#30)
 
             
             plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
@@ -1867,13 +1887,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             plt.axvline(x=wavelength,label="Na I D",color="Gray")
             
             
-            plt.yticks(fontsize=25)
+            plt.yticks(fontsize=10)#25)
             ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
-            plt.xticks(ticks,fontsize=25)
+            plt.xticks(ticks,fontsize=10)#25
             plt.text(0.98, 0.02, f"EW={area_over_continuum:.2f} +/- {err:.2f}", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
 
 
-            plt.legend(fontsize=20)
+            plt.legend(fontsize=10)#20
 
             
             if plots:
