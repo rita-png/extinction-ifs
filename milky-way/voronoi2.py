@@ -16,7 +16,7 @@ from functions import *
 
 bootstrap=False
 
-def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wavelength,width,mw_mask,target_sn = 200):
+def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wavelength,width,mw_mask,best_window,best_KS,target_sn = 200):
     
 
 
@@ -31,30 +31,6 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     data = region_chopped_Na
 
-    """width=70
-    region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
-    mw_mask=mw_mask[y_center-width:y_center+width,x_center-width:x_center+width]
-    data, new_wave = chop_data_cube(region, wave, wavelength-100, wavelength+100)
-
-
-    if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
-        errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
-    else:
-        errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
-        np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)"""
-
-    """if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
-        errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
-    else:
-        errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
-        np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)"""
-
-    #errcube = estimate_flux_error(data,new_wave,wavelength,kernel_size=100)
-    #np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
-
-
-
-
     i=findWavelengths(new_wave, wavelength)[1]
 
     ny, nx = data[i].shape
@@ -63,27 +39,16 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     y = yy.ravel()
     xy = np.column_stack([x, y])
 
-
-    #print(xy)
-
-
     signal = data[i].ravel()
     noise  = errcube[i].ravel()
 
-
-    
-
     additive = False
-
-
-    print(xy.shape)
-    print(signal.shape)
-    print(noise.shape)
 
     snr = signal / noise
     snr_total = np.sqrt(np.sum((signal / noise)**2))
 
-    target_sn = snr_total/np.sqrt(150) #scaling to have approx. 200 bins
+    print("WARNING REMOCE THE FOLLOWIGN LINES")# change to target_sn = snr_total/np.sqrt(150)
+    target_sn = snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
     print("The target SNR is ", target_sn)
 
     plt.hist(snr, bins=50, edgecolor='black')
@@ -92,7 +57,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     plt.show()
     plt.savefig("DATA/"+SN_name+"/"+"temp_histogram.pdf", bbox_inches='tight')
 
-    ###trying out f/c
+    ###trying out binning in f/c
     """kernel_size=100
     start_time = time.time()
 
@@ -140,7 +105,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     signal=new_signal
     noise=new_noise"""
 
-    ###trying out f/c
+    ###trying out binninf in f/c
 
     
 
@@ -171,8 +136,6 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
 
     ## converting the output into a binned image
-
-
     bin_index = pow.xybin
 
     aux=pow.bin_num
@@ -200,7 +163,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     ####bin_fluxes = np.full(n_bins, np.nan)
     ####bins_used = []
-
+    all_bin_spectra = []
     for b in range(n_bins):
         mask = (bin_map == b)
 
@@ -209,17 +172,24 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         ####bin_fluxes[b] = np.median(img[mask])
 
 
+        
         #binning the spectra ONLY in bins that do not include MW stars
         if np.any(~mw_mask & mask):
             k+=1
             continue
-        
+
+        print("WARNING REMOCE THE FOLLOWIGN LINES")#only saving the good bins, w/out stars
+        bin_pixels = data[:, mask]
+        bin_pixels_err = errcube[:, mask]
+        aux=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
+        all_bin_spectra.append(aux)
+        ##
+
         bin_pixels = data[:, mask]
         bin_pixels_err = errcube[:, mask]
 
         
         spectra_of_bin=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
-
         
 
         ys, xs = np.where(mask)
@@ -231,10 +201,10 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         #computing EWs
         if bootstrap==True:
             spectra_of_bin_err  = bootstrap_error_on_sum(bin_pixels)
-            aqui tenho de usar bestwindow e best conitnuum
-            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+            #aqui tenho de usar bestwindow e best conitnuum just CHANGED THIS ON MAR 3RD
+            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
         else:
-            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=400,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
         
 
         if not np.isnan(a[0]):
@@ -265,6 +235,12 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
             np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)"""        
             
 
+    print("WARNING REMOCE THE FOLLOWIGN LINES")
+    all_bin_spectra = np.array(all_bin_spectra)
+    np.save("DATA/"+SN_name+"/temp/"+"all_bin_spectra.npy", all_bin_spectra)
+    np.save("DATA/"+SN_name+"/temp/"+"bin_map.npy", bin_map)
+    np.save("DATA/"+SN_name+"/temp/"+"binned_img.npy", binned_img)
+    np.save("DATA/"+SN_name+"/temp/"+"EWs_map_bins.npy", EWs_map_bins)
 
     
 

@@ -13,9 +13,10 @@ importlib.reload(functions)
 from functions import *
 
 
-SN_name="CSP14aaq"#"SN2007cq"#"ASASSN-14ad"#
+SN_name="SN2010ev"#"SN2007cq"#"ASASSN-14ad"#
 
-isophotes=True
+print("WARNING change the following to true if you want isophotes")
+isophotes=False
 
 #potassium is 7665
 if SN_name=="SN2010ev":
@@ -70,8 +71,33 @@ wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
 
 
 na_rest=(5890+5896)/2
-
 index=findWavelengths(wave, na_rest)[1]
+
+### defining a region for voronoi binning and Isophotes ###
+y_center=int(y_len/2)
+x_center=int(x_len/2)
+
+print("WARNING REMOCE THE FOLLOWIGN LINES")#change to 70 again
+width=70#150
+region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
+region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
+
+
+# import cube of uncertainties
+
+if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
+    errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+    print("Read the error cube from a npy file")
+    print(np.shape(errcube)) #this has to be the same (the uncertainty cube is computted for the region of interest only)
+    print(np.shape(region[0]),"\n^^^^^^^^^^^^^^")
+else:
+    errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
+    np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
+
+
+##
+
+
 
 
 
@@ -118,7 +144,7 @@ y_coords = y_coords[keep]
 
 
 
-print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask as a total of ",np.sum(keep)," masked stars.")
+print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask has a total of ",np.sum(keep)," masked stars.")
 
 ##
 
@@ -207,6 +233,7 @@ if image.ndim == 3:
 masked_cube,mask=create_star_mask(cube, star_coords, radius=10)
 np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
 np.save("DATA/"+SN_name+"/mask.npy", mask)
+mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
 
 
 
@@ -330,31 +357,8 @@ plt.legend()
 plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
 plt.close()"""
 #####
-#can uncomment the following
 
 
-
-### Defining a region for voronoi binning and Isophotes and computing err cube ###
-
-y_center=int(y_len/2)
-x_center=int(x_len/2)
-
-width=70
-region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
-mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
-
-
-region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
-
-
-
-
-if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
-    errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
-    print("Read the error cube from a npy file")
-else:
-    errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
-    np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
 
 
 ### Kron's ellipse ###
@@ -688,7 +692,8 @@ plt.close()
 ## Voronoi binning
 
 import voronoi2
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask)#,target_sn = target_snr)#750 for f/c#250
+
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS)#,target_sn = target_snr)#750 for f/c#250
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
