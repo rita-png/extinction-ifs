@@ -59,7 +59,11 @@ from photutils.datasets import make_noise_image
 
 def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bound_w_max,plots=False,save=""):
 
-    KSs=np.arange(20,200,10)
+    #KSs=np.arange(20,200,10)
+    v_seps = np.arange(200,1200,50)
+    KSs=get_kernel_size(v_seps, wavelength, continuum_bound_w_min, continuum_bound_w_max)
+    
+    KSs = KSs.astype(int)
 
     EWs=[]
     SNR_lines=[]
@@ -75,8 +79,8 @@ def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bo
 
     
     if plots==True:
-        delta_x = np.average(np.diff(wave))
-        v_seps = get_velocity_separation(KSs, wavelength, continuum_bound_w_min, continuum_bound_w_max)
+        #delta_x = np.average(np.diff(wave))
+        #v_seps = get_velocity_separation(KSs, wavelength, continuum_bound_w_min, continuum_bound_w_max)
 
         fig, ax = plt.subplots(1, 3, figsize=(20, 8))
         fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
@@ -125,12 +129,24 @@ def get_velocity_separation(kernel_size, lambda_center, continuum_bound_w_min, c
     # doppler
     v_sep = (delta_lambda / lambda_center) * c"""
 
-
-    size=100
     delta_size=(np.pi - (-np.pi))/kernel_size * (lambda_center+100 - (lambda_center-100))
     delta_vel = (delta_size/lambda_center)*c
     
     return delta_vel#v_sep
+
+
+# convert velocity separation (km/s) into kernel size (in pixels).
+def get_kernel_size(delta_vel, lambda_center, continuum_bound_w_min, continuum_bound_w_max):
+    
+    
+    c = 299792.458
+    delta_size = delta_vel*lambda_center/c
+
+
+    kernel_size=(np.pi - (-np.pi)) * (lambda_center+100 - (lambda_center-100)) / delta_size
+    
+    
+    return kernel_size
 
 
 
