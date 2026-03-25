@@ -77,7 +77,7 @@ index=findWavelengths(wave, na_rest)[1]
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
-print("WARNING REMOCE THE FOLLOWIGN LINES")#change to 70 again
+#print("WARNING REMOCE THE FOLLOWIGN LINES")#change to 70 again
 width=70#150
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
 region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
@@ -419,8 +419,12 @@ EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
 # inspect best kernel size for continuum
+continuum_bound_w_min=new_wave[0]
+continuum_bound_w_max=new_wave[-1]
+print(type(continuum_bound_w_min), continuum_bound_w_min)
+print(type(continuum_bound_w_max), continuum_bound_w_max)
 
-best_KS = best_continuum(wave, spectrum, wavelength=na_rest,vel=400,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+best_KS = best_continuum(wave, spectrum, na_rest,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
 
 # inspect best window
 best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")

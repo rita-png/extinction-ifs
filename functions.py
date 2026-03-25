@@ -1652,11 +1652,21 @@ def gaia_parameters(matched_ras,matched_decs):
 
 def estimate_spec_err(x_cont,y_cont,interp):
 
-    yerr=0
+    yerr_wrong=0
     for k in range(len(y_cont)):
-        yerr+=(y_cont[k]-interp(x_cont[k]))**2
-        yerr=np.sqrt(yerr)
+        yerr_wrong+=(y_cont[k]-interp(x_cont[k]))**2
+        yerr_wrong=np.sqrt(yerr_wrong)
+    print("The wrong flux error was ", yerr_wrong)
+
+    
+    residuals = y_cont - interp(x_cont)
+    yerr = np.sqrt(np.mean(residuals**2))
+
+    print("The corrected flux error now is ", yerr)
     return yerr
+
+    
+
 
 # estimate flux error of a cube
 
@@ -1753,7 +1763,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
         
-        
+        print("NEW MAR2026 KS IS ",KS)
         interp=interp1d(x_cont, cont, kind='cubic')
 
 
