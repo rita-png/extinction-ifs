@@ -57,7 +57,7 @@ from photutils.isophote import build_ellipse_model
 from astropy.modeling.models import Gaussian2D
 from photutils.datasets import make_noise_image
 
-def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
+def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bound_w_max,plots=False,save=""):
 
     KSs=np.arange(20,200,10)
 
@@ -76,7 +76,7 @@ def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
     
     if plots==True:
         delta_x = np.average(np.diff(wave))
-        v_seps = get_velocity_separation(KSs, delta_x, wavelength)
+        v_seps = get_velocity_separation(KSs, wavelength, continuum_bound_w_min, continuum_bound_w_max)
 
         fig, ax = plt.subplots(1, 3, figsize=(20, 8))
         fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
@@ -111,19 +111,26 @@ def best_continuum(wave, spec, wavelength,vel,plots=False,save=""):
 import numpy as np
 
 # convert kernel size (in pixels) to velocity separation (km/s).
-def get_velocity_separation(kernel_size, delta_x, lambda_center):
+def get_velocity_separation(kernel_size, lambda_center, continuum_bound_w_min, continuum_bound_w_max):
     
     #kernel_size is the number of pixels in the kernel
     #delta_x is the wavelength spacing
+    #lambda_center is the wavelenght of the line
+    #continuum_bound_w_min and continuum_bound_w_max are the min and max wavelengths used in the continuum estimates
     
     c = 299792.458
     
-    delta_lambda = kernel_size * delta_x
+    """delta_lambda = kernel_size * delta_x
     
     # doppler
-    v_sep = (delta_lambda / lambda_center) * c
+    v_sep = (delta_lambda / lambda_center) * c"""
+
+
+    size=100
+    delta_size=(np.pi - (-np.pi))/kernel_size * (lambda_center+100 - (lambda_center-100))
+    delta_vel = (delta_size/lambda_center)*c
     
-    return v_sep
+    return delta_vel#v_sep
 
 
 
