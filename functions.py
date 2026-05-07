@@ -779,23 +779,109 @@ def two_gaussian_poly_nobg(x, A1, mu1, sigma1, A2, mu2,sigma2,shift=4.5):
 
 ## fitting Na i Doublet assuming emission at the same wavelength
 
-def two_gaussian_emission(x, A1, mu1, sigma1, A2,shift,A3,sigma3):
+# ── Model A: most free — shift & sigma2=sigma1 tied, mu3 fixed ──────────────
+def modelA(x, A1, mu1, sigma1, A2,shift,A3,sigma3):
      
     mu2=mu1+shift
     sigma2=sigma1
     peak1 = gaussian(x,A1,mu1,sigma1) #A1 * np.exp(-((x - mu1)**2) / (2 * sigma1**2)) 
     peak2 = gaussian(x,A2,mu2,sigma2) #A2 * np.exp(-((x - mu2)**2) / (2 * sigma2**2))
-    emissionpeak = gaussian(x,np.sqrt(A3**2),5893,sigma3) #A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
-
+    emissionpeak = gaussian(x,abs(A3),5893,sigma3) #A3 * np.exp(-((x - mu3)**2) / (2 * sigma3**2))
     return peak1 + peak2 + emissionpeak
 
-"""options are:
-- A1,mu1,sigma1,A2,mu2,sigma2,A3,mu3,sigma3 all free, mu3 fixed
-- A1,mu1,sigma1,A2,mu2,sigma2,A3,sigma3 all free, mu3, sigma2=sigma1 fixed
-- A1,mu1,sigma1,A2,mu2,A3,sigma3 all free, mu3, sigma2=sigma1=FWHM fixed
-- A1,sigma1,A2,sigma2,A3,sigma3 all free, mu3, sigma2=sigma1 fixed"""
+# ── Model B: all 9 params free except mu3 fixed ─────────────────────────────
+def modelB(x, A1, mu1, sigma1, A2, mu2, sigma2, A3, sigma3):
+    """8 params: mu3 fixed at 5893, everything else free"""
+    return gaussian(x, A1, mu1, sigma1) + gaussian(x, A2, mu2, sigma2) + gaussian(x, abs(A3), 5893, sigma3)
+
+FWHM_FIXED = 4.120935078804162   # <-- FWHM measured from Halpha
+SIGMA_FIXED = FWHM_FIXED / (2 * np.sqrt(2 * np.log(2)))
+# ── Model C: sigma fixed to MUSE FWHM, mu3 fixed ───────
+def modelC(x, A1, mu1, A2, A3, sigma3):
+    """5 params: sigma1=sigma2=sigma_fixed, mu2 free via shift implicit in mu1, mu3 fixed"""
+    
+
+    shift = 5.97  # Na doublet separation — fix to known value
+    mu2 = mu1 + shift
+    return gaussian(x, A1, mu1, SIGMA_FIXED) + gaussian(x, A2, mu2, SIGMA_FIXED) + gaussian(x, abs(A3), 5893, sigma3)
+
+# ── Model D: mu1 also fixed (both doublet centres fixed) ────────────────────
+def modelD(x, A1, sigma1, A2, sigma2, A3, sigma3):
+    """6 params: mu1 & mu2 fixed to Na doublet rest wavelengths, mu3 fixed"""
+    mu1 = 5889.95
+    mu2 = 5895.92
+    mu3 = (mu1+mu2)/2
+    return gaussian(x, A1, mu1, sigma1) + gaussian(x, A2, mu2, sigma2) + gaussian(x, abs(A3), mu3, sigma3)
+
+# Model E: like C but let mu3 free
+def modelE(x, A1, mu1, A2, A3, mu3, sigma3):
+    """6 params: absorption sigmas fixed to MUSE, emission centre free"""
+    mu2 = mu1 + 5.97
+    return (gaussian(x, A1, mu1, SIGMA_FIXED)
+          + gaussian(x, A2, mu2, SIGMA_FIXED)
+          + gaussian(x, abs(A3), mu3, sigma3))
+
+# Model F: like C but emission also fixed to MUSE resolution (no broad component)
+def modelF(x, A1, mu1, A2, A3):
+    """4 params: everything fixed to MUSE sigma, emission at 5893"""
+    mu2 = mu1 + 5.97
+    return (gaussian(x, A1, mu1, SIGMA_FIXED)
+          + gaussian(x, A2, mu2, SIGMA_FIXED)
+          + gaussian(x, abs(A3), 5893, SIGMA_FIXED))
+
+# Model G: no emission, mu1 free, mu2 tied
+def modelG(x, A1, mu1, A2):
+    """3 params: everything fixed to MUSE sigma, NO EMISSION"""
+    mu2 = mu1 + 5.97
+    return (gaussian(x, A1, mu1, SIGMA_FIXED)
+          + gaussian(x, A2, mu2, SIGMA_FIXED))
+
+# Model H: mu1,2 fixed, no emission
+def modelH(x, A1, A2):
+    """2 params: all mu fixed to MW, NO EMISSION"""
+    mu1 = 5889.95
+    mu2 = 5895.92
+    return (gaussian(x, A1, mu1, SIGMA_FIXED)
+          + gaussian(x, A2, mu2, SIGMA_FIXED))
+
+# Model I: mu1,2 fixed,sigmas free, no emission
+def modelI(x, A1, A2,sigma1,sigma2):
+    """4 params: all mu fixed to MW, NO EMISSION,sigmas free"""
+    mu1 = 5889.95
+    mu2 = 5895.92
+    return (gaussian(x, A1, mu1, sigma1)
+          + gaussian(x, A2, mu2, sigma2))
 
 
+# Model J: mu1,2 fixed, with emission
+def modelJ(x, A1, A2, A3):
+    """3 params: all mu fixed to MW,  with EMISSION"""
+    mu1 = 5889.95
+    mu2 = 5895.92
+    mu3 = (mu1+mu2)/2
+    return (gaussian(x, A1, mu1, SIGMA_FIXED)
+          + gaussian(x, A2, mu2, SIGMA_FIXED)
+          + gaussian(x, abs(A3), 5893, SIGMA_FIXED))
+
+     
+def compute_bic(flux_fit, model_flux, n_params):
+    
+    n = len(flux_fit)
+    residuals = flux_fit - model_flux
+    sigma2 = np.var(residuals, ddof=n_params)
+    
+    log_likelihood = -0.5 * n * np.log(2 * np.pi * sigma2) \
+                     - np.sum(residuals**2) / (2 * sigma2) #assuming Gaussian noise
+    
+    bic = n_params * np.log(n) - 2 * log_likelihood
+    return bic
+
+def compute_reduced_chi2(flux_fit, model_flux, n_params):
+    n = len(flux_fit)
+    dof = n - n_params # degrees of freedom
+    sigma2 = np.var(flux_fit - model_flux)
+    chi2 = np.sum((flux_fit - model_flux)**2 / sigma2)
+    return chi2 / dof
 
 ## chopping data to window view ##
 
