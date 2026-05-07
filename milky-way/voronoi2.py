@@ -48,7 +48,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     snr_total = np.sqrt(np.sum((signal / noise)**2))
 
     print("WARNING REMOCE THE FOLLOWIGN LINES")# change to target_sn = snr_total/np.sqrt(150)
-    target_sn = 250#snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
+    target_sn = snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
     print("The target SNR is ", target_sn)
 
     plt.hist(snr, bins=50, edgecolor='black')
@@ -178,11 +178,11 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
             k+=1
             continue
 
-        """print("WARNING REMOCE THE FOLLOWIGN LINES")#only saving the good bins, w/out stars
+        print("WARNING REMOCE THE FOLLOWIGN LINES")#only saving the good bins, w/out stars
         bin_pixels = data[:, mask]
         bin_pixels_err = errcube[:, mask]
         aux=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
-        all_bin_spectra.append(aux)"""
+        all_bin_spectra.append(aux)
         ##
 
         bin_pixels = data[:, mask]
@@ -201,7 +201,6 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
         #computing EWs
         if bootstrap==True:
             spectra_of_bin_err  = bootstrap_error_on_sum(bin_pixels)
-            #aqui tenho de usar bestwindow e best conitnuum just CHANGED THIS ON MAR 3RD
             a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
         else:
             a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
