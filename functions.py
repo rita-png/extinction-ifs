@@ -60,7 +60,7 @@ from photutils.datasets import make_noise_image
 def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bound_w_max,plots=False,save=""):
 
     #KSs=np.arange(20,200,10)
-    v_seps = np.arange(200,1200,50)
+    v_seps = np.arange(500,1400,50)
     KSs=get_kernel_size(v_seps, wavelength, continuum_bound_w_min, continuum_bound_w_max)
     
     KSs = KSs.astype(int)
