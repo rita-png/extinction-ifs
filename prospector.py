@@ -1,4 +1,19 @@
 #import prospect
+"""
+confirmar se é preciso corrigir o redshift
+
+param de resolucao do espetro deixar livre
+
+200 ou 500 interacoes no dynasty
+
+redshfit livre
+
+mask emission lines"""
+
+
+
+
+
 
 from functions import *
 
@@ -37,7 +52,7 @@ import numpy as np
 import astroquery
 
 
-z= 0.009213 #redshift of SN2010ev host (NGC3244)
+z=0.009213#redshift of SN2010ev host (NGC3244)
 
 
 
@@ -54,7 +69,8 @@ from prospect.sources import CSPSpecBasis #use FastStepBasis for parametric SFH
 
 # Importing data
 
-
+#from prospect.fitting import fit_model;
+#help(fit_model)
 import astropy.io.fits as fits
 
 #import data
@@ -111,30 +127,19 @@ err = np.clip(err, a_min=0.1 * np.nanmedian(flux), a_max=None) #NOVO
 print("Change spectra uncertainty above") #use the one from my other code file, milky-way.py
 
 
-# build observation in old prospector version
-"""obs = {
-    'wavelength': np.array(wave, dtype=np.float64),
-    'spectrum': np.array(flux, dtype=np.float64),
-    'unc': np.array(err, dtype=np.float64),
-    'redshift': z,
-    'filters': None, # sequence of sedpy filter objects or filter names, used to calculate model magnitudes
-    'phot_mask': None # boolean array of same length as the wavelength vector, where False elements are ignored in the likelihood calculation
-    
-}
-obs = fix_obs(obs)"""
-
 # build observation in new prospector version
 from prospect.observation import Spectrum
+
 obs = Spectrum(
     wavelength=np.array(wave, dtype=np.float64),
-    flux=np.array(flux, dtype=np.float64),
-    uncertainty=np.array(err, dtype=np.float64),
+    spectrum=np.array(flux, dtype=np.float64),
+    unc=np.array(err, dtype=np.float64),
     redshift=z,
     mask=np.isfinite(flux)
 )
 
+    
 observations = [obs]
-
 
 print("Clip threshold:", 0.15 * np.nanmedian(obs['spectrum']))
 print("Unc min:", np.nanmin(obs['unc']))
@@ -292,6 +297,7 @@ plt.plot(obs.wavelength, spec[0], label='best fit')  # spec is now a list
 plt.legend()
 plt.show()
 
+
 print("\nUsing these best fit parameters as initial values for dynesty sampling, to get the posterior distribution of the parameters\n")
 print("###### dynesty fitting ######")
 # set initial values for dynesty from optimze fit
@@ -300,28 +306,9 @@ for i, (name, val) in enumerate(zip(model.free_params, theta_best)):
 
 # reinitialize model with new inits
 model = SedModel(model_params)
+fitting_kwargs = dict(nlive_init=200, nested_method="rwalk", nested_target_n_effective=200, nested_dlogz_init=0.5)
 
-# now run dynesty starting from these values
-fitting_kwargs = dict(nlive_init=400, nested_method="rwalk", nested_target_n_effective=1000, nested_dlogz_init=0.05)
-output_dynesty = fit_model(observations, model, sps, noise=noise_model, dynesty=True, optimize=False, **fitting_kwargs, verbose=True)
-
-##tests
-theta = model.theta.copy()
-
-print(model.prior_product(theta))
-
-spec, mfrac = model.predict(theta, observations, sps=sps)
-
-print(np.any(~np.isfinite(spec)))
-print(np.any(np.isnan(spec)))
-print(np.max(spec), np.min(spec))
-
-import inspect
-from prospect.fitting import lnprobfn
-
-print(inspect.signature(lnprobfn))
-
-###
+output_dynesty = fit_model(observations, model, sps, noise=noise_model, nested_sampler='dynesty', optimize=False, **fitting_kwargs, verbose=True)
 
 
 
@@ -362,14 +349,10 @@ corner.scatter(pbest[:, None], axes, color="firebrick", marker="o")
 pl.show()
 
 from prospect.plotting.utils import best_sample
-theta_best = best_sample(output["sampling"][0])
-spec, _, _ = model.predict(theta_best, obs=obs, sps=sps)
-
-plt.figure()
-plt.plot(obs['wavelength'], obs['spectrum'], label='data')
-plt.plot(obs['wavelength'], spec, label='best fit')
-plt.legend()
-plt.show()
+theta_best = best_sample(out)
+spec, mfrac = model.predict(theta_best, observations=observations, sps=sps)
+plt.plot(obs.wavelength, obs.flux, label='data')
+plt.plot(obs.wavelength, spec[0], label='best fit')
 
 # total stellar mass formed (in solar masses), age of the galaxy, metallicity, diffuse dust attenuation (Av)
 
