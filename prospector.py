@@ -1,7 +1,7 @@
-import prospect
-#print(prospect.__version__)
+#import prospect
 
 from functions import *
+
 #use 1/10 galaxy mass OR use full integrated light
 #take a look at the manual
 
@@ -21,10 +21,15 @@ from functions import *
 
 #pick the galaxy accordign to whatever i have data from cosmos2020 and also MUSE
 
-import os
-os.environ['SPS_HOME'] = '/home/rita13santos/PhD/fsps'
-import fsps
 
+import os
+os.environ['SPS_HOME'] = '../fsps'
+
+#os.environ['SPS_HOME'] = '/home/rita13santos/PhD/fsps'
+import prospect
+print(prospect.__version__)
+
+import fsps
 import dynesty
 import sedpy
 import h5py, astropy
@@ -38,9 +43,11 @@ z= 0.009213 #redshift of SN2010ev host (NGC3244)
 
 # import prospector packages
 from sedpy.observate import load_filters
-from prospect.utils.obsutils import fix_obs
+#from prospect.utils.obsutils import fix_obs
+from prospect.observation.obsutils import fix_obs
 from prospect.models.templates import TemplateLibrary
-from prospect.models.sedmodel import SedModel
+#from prospect.models.sedmodel import SedModel
+from prospect.models.sedmodel import SpecModel as SedModel
 from prospect.models import priors
 from prospect.sources import CSPSpecBasis #use FastStepBasis for parametric SFH
 
@@ -51,7 +58,7 @@ from prospect.sources import CSPSpecBasis #use FastStepBasis for parametric SFH
 import astropy.io.fits as fits
 
 #import data
-file_name="../DATA/SN2010ev.fits"
+file_name="../DATA/SN2001el.fits"#SN2010ev.fits" 
 data = fits.open(file_name)
 cube = data[1].data   # this is the cube, a (3681 x 341 x 604) matrix with fluxes at different 3681 wavelengths and 308 x 318 spatial pixels ("spaxels")
 header = data[1].header # this has information on the data cube
@@ -71,6 +78,10 @@ NAXIS = int(header["NAXIS3"])
 CDELT = float(header["CD3_3"])
 CRPIX = float(header["CRPIX3"])
 wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
+
+print("Raw flux range:", np.nanmin(cube[0]), np.nanmax(cube[0]))
+print("Header BUNIT:", header.get('BUNIT', 'not found'))
+
 
 
 x_center, y_center = int(x_len/2), int(y_len/2)
@@ -92,16 +103,16 @@ region_err = ecube[:, y_min:y_max, x_min:x_max]
 flux_sum = np.nansum(region, axis=(1, 2)) / (len(region[0][0]) * len(region[0]))
 err_sum = np.sqrt(np.nansum(region_err**2, axis=(1, 2))) / (len(region[0][0]) * len(region[0]))
 
-flux = (flux_sum / 1e17) * wave**2 * 3.34e4 / 3631.0
-err  = (err_sum  / 1e17) * wave**2 * 3.34e4 / 3631.0
+flux = (flux_sum / 1e20) * wave**2 * 3.34e4 / 3631.0
+err  = (err_sum  / 1e20) * wave**2 * 3.34e4 / 3631.0
 err = np.clip(err, a_min=0.1 * np.nanmedian(flux), a_max=None) #NOVO
 
 
 print("Change spectra uncertainty above") #use the one from my other code file, milky-way.py
 
 
-# build observation
-obs = {
+# build observation in old prospector version
+"""obs = {
     'wavelength': np.array(wave, dtype=np.float64),
     'spectrum': np.array(flux, dtype=np.float64),
     'unc': np.array(err, dtype=np.float64),
@@ -110,12 +121,22 @@ obs = {
     'phot_mask': None # boolean array of same length as the wavelength vector, where False elements are ignored in the likelihood calculation
     
 }
+obs = fix_obs(obs)"""
+
+# build observation in new prospector version
+from prospect.observation import Spectrum
+obs = Spectrum(
+    wavelength=np.array(wave, dtype=np.float64),
+    flux=np.array(flux, dtype=np.float64),
+    uncertainty=np.array(err, dtype=np.float64),
+    redshift=z,
+    mask=np.isfinite(flux)
+)
+
+observations = [obs]
 
 
-
-obs = fix_obs(obs)
-
-print("Clip threshold:", 0.1 * np.nanmedian(obs['spectrum']))
+print("Clip threshold:", 0.15 * np.nanmedian(obs['spectrum']))
 print("Unc min:", np.nanmin(obs['unc']))
 
 # set model
@@ -130,24 +151,15 @@ model_params.update(TemplateLibrary["spectral_smoothing"])
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 
-model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 1e6, 'prior': priors.LogUniform(mini=1e5, maxi=1e10)}
+model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 3e4, 'prior': priors.LogUniform(mini=1e4, maxi=1e8)}
 model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 0.5,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
-model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 5.0,  'prior': priors.TopHat(mini=0.1, maxi=13.8)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 0.1,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
+model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 1.0,  'prior': priors.TopHat(mini=0.1, maxi=13.8)}
 model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 1.0,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
 model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4} # Calzetti # Kriek & Conroy, allows for free R_V
-model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.7, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}
+model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.7, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
 
 #
-
-"""model_params['sigma_smooth'] = {'N': 1, 'isfree': True,
-                 'init': 120.0, 'units': 'km/s', 'init_disp' : 200.0,
-                 'prior': priors.TopHat(mini=70, maxi=200)}"""
-
-
-
-
-
 
 """
 mass,logzsol,dust2,rv =  9.5,-0.5,0.5,3.1
@@ -207,15 +219,23 @@ noise_model = (None, None) #i HAVE TO CHANGE THIS, A tuple of NoiseModel objects
 
 
 #test
-spec, phot, mfrac = model.predict(model.theta, obs=obs, sps=sps)
+spec, mfrac = model.predict(model.theta, observations=observations, sps=sps)
+
 print("Data range:  ", np.nanmin(obs['spectrum']), np.nanmax(obs['spectrum']))
 print("Model range: ", np.nanmin(spec), np.nanmax(spec))
 print("Unc range:   ", np.nanmin(obs['unc']), np.nanmax(obs['unc']))
 
-plt.plot(obs['wavelength'], obs['spectrum'], label='data')
-plt.plot(obs['wavelength'], spec, label='model')
+
+print("IMPORTANT\n\nData max:  ", np.nanmax(obs.flux))
+print("Model max: ", np.nanmax(spec[0]))
+print("Ratio:     ", np.nanmax(obs.flux) / np.nanmax(spec[0]))
+
+
+plt.plot(obs.wavelength, obs.flux, label='data')
+plt.plot(obs.wavelength, spec[0], label='model')
 plt.legend()
-plt.show()
+plt.savefig('best_fit_optimize.png', dpi=150, bbox_inches='tight')
+plt.show(block=True)  # block=True forces the script to wait
 print("N wavelength points:", len(obs['wavelength']))
 
 #
@@ -251,31 +271,76 @@ from prospect.fitting import lnprobfn, fit_model
 
 fitting_kwargs = dict(nlive_init=100, nested_method="rwalk", nested_target_n_effective=100, nested_dlogz_init=2) #400, 100, 0.05
 
-output = fit_model(obs, model, sps, noise=noise_model, dynesty=False, optimize=True, **fitting_kwargs,verbose=True)
-# for optimize=True, results are here:
+output = fit_model(observations, model, sps, noise=noise_model, dynesty=False, optimize=True, **fitting_kwargs,verbose=True)
+# for optimize==True, results are here:
 result = output["optimization"]
 
-# get best fit params
-theta_best = output["optimization"][0]
-print(len(theta_best), model.ndim)
 
-# plot
-spec, _, _ = model.predict(theta_best, obs=obs, sps=sps)
+theta_best = output["optimization"][0][0].x
+print("Best fit parameters from optimization:")
+for name, val in zip(model.free_params, theta_best):
+    print(f"  {name}: {val}")
+
+
+
+# plot best fit (frooptimize==True)
+spec, mfrac = model.predict(theta_best, observations=observations, sps=sps)
+
 plt.figure()
-plt.plot(obs['wavelength'], obs['spectrum'], label='data')
-plt.plot(obs['wavelength'], spec, label='best fit')
+plt.plot(obs.wavelength, obs.flux, label='data')
+plt.plot(obs.wavelength, spec[0], label='best fit')  # spec is now a list
 plt.legend()
 plt.show()
 
-"""
+print("\nUsing these best fit parameters as initial values for dynesty sampling, to get the posterior distribution of the parameters\n")
+print("###### dynesty fitting ######")
+# set initial values for dynesty from optimze fit
+for i, (name, val) in enumerate(zip(model.free_params, theta_best)):
+    model_params[name]["init"] = val
 
+# reinitialize model with new inits
+model = SedModel(model_params)
+
+# now run dynesty starting from these values
+fitting_kwargs = dict(nlive_init=400, nested_method="rwalk", nested_target_n_effective=1000, nested_dlogz_init=0.05)
+output_dynesty = fit_model(observations, model, sps, noise=noise_model, dynesty=True, optimize=False, **fitting_kwargs, verbose=True)
+
+##tests
+theta = model.theta.copy()
+
+print(model.prior_product(theta))
+
+spec, mfrac = model.predict(theta, observations, sps=sps)
+
+print(np.any(~np.isfinite(spec)))
+print(np.any(np.isnan(spec)))
+print(np.max(spec), np.min(spec))
+
+import inspect
+from prospect.fitting import lnprobfn
+
+print(inspect.signature(lnprobfn))
+
+###
+
+
+
+print(output_dynesty["sampling"])
+
+
+
+result, duration = output_dynesty["sampling"]
+
+# save results
 from prospect.io import write_results as writer
 hfile = "./quickstart_dynesty_mcmc.h5"
-writer.write_hdf5(hfile, {}, model, obs,
-                 output["sampling"][0], None,
+writer.write_hdf5(hfile, {}, model, observations,
+                 output_dynesty["sampling"][0], None,
                  sps=sps,
-                 tsample=output["sampling"][1],
+                 tsample=output_dynesty["sampling"][1],
                  toptimize=0.0)
+
+
 
 
 # plotting
@@ -304,7 +369,7 @@ plt.figure()
 plt.plot(obs['wavelength'], obs['spectrum'], label='data')
 plt.plot(obs['wavelength'], spec, label='best fit')
 plt.legend()
-plt.show()"""
+plt.show()
 
 # total stellar mass formed (in solar masses), age of the galaxy, metallicity, diffuse dust attenuation (Av)
 
