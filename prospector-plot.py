@@ -8,6 +8,8 @@ with open("output_dynesty.pkl", "rb") as f:
     output_dynesty = pickle.load(f)
 
 sampling = output_dynesty["sampling"]
+from matplotlib.ticker import LogLocator
+from matplotlib.ticker import NullFormatter
 
 print("keys:", sampling.keys())
 print("points shape:", sampling["points"].shape)
@@ -36,4 +38,12 @@ from prospect.plotting.utils import best_sample
 nsamples, ndim = chain.shape
 cfig, axes = plt.subplots(ndim, ndim, figsize=(10,9))
 axes = corner.allcorner(chain.T, theta_labels, axes, weights=weights, color="royalblue", show_titles=True)
+for ax in axes[:,0]:
+    ax.set_xscale('log')
+    """ax.xaxis.set_major_locator(LogLocator(base=10, numticks=3))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.tick_params(axis='x', labelsize=8, rotation=30)"""
+
+plt.tight_layout()
+
 plt.savefig("corner.png", dpi=150)
