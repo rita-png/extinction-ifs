@@ -194,20 +194,24 @@ print("Unc min:", np.nanmin(obs['unc']))
 
 from prospect.models.templates import TemplateLibrary
 
-# new priors #
-
+#  priors for optimize=true #
 model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
-model_params.update(TemplateLibrary["spectral_smoothing"])
-model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 189.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
+
+# priors for optimize=true # fixed
+model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 2} # Calzetti dust curve
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 
-model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 6e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
-model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.8, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 0.3,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
-model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 2.0,  'prior': priors.TopHat(mini=0.1, maxi=13.8)}
-model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 1.4,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 2} # Calzetti dust curve
+# priors for optimize=true # free
+model_params.update(TemplateLibrary["spectral_smoothing"])
+model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 270.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
+
+
+model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 8e3, 'prior': priors.LogUniform(mini=1e2, maxi=1e5)}
+model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.3,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
+model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.7,  'prior': priors.TopHat(mini=0.1, maxi=13.8)}
+model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 2.5,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
 model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.7, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
 
 #
@@ -352,11 +356,12 @@ for i, (name, val) in enumerate(zip(model.free_params, theta_best)):
     model_params[name]["init"] = val
 
 # tighten priors around best fit values
-model_params["mass"]["prior"]       = priors.LogUniform(mini=max(1e4, theta_best[0]/10), maxi=min(1e10, theta_best[0]*10))
+model_params["mass"]["prior"]       = priors.LogUniform(mini=max(1e1, theta_best[0]/5), maxi=min(1e10, theta_best[0]*5))
 model_params["logzsol"]["prior"]    = priors.TopHat(mini=max(-2.0, theta_best[1]-0.5), maxi=min(0.19, theta_best[1]+0.5))
 model_params["dust2"]["prior"]      = priors.TopHat(mini=max(0.0, theta_best[2]-0.3), maxi=min(4.0, theta_best[2]+0.3))
 model_params["tage"]["prior"]       = priors.TopHat(mini=max(0.1, theta_best[3]-2.0), maxi=min(13.8, theta_best[3]+2.0))
 model_params["tau"]["prior"]        = priors.LogUniform(mini=max(0.1, theta_best[4]/5), maxi=min(30, theta_best[4]*5))
+model_params["sigma_smooth"]["prior"] = priors.TopHat(mini=max(50, theta_best[5]/2), maxi=min(500, theta_best[5]*2))
 model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]-1.0), maxi=min(0.4, theta_best[6]+1.0))
 
 model = SedModel(model_params)
