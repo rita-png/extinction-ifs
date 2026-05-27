@@ -4,6 +4,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 
+import pickle
+import numpy as np
+import matplotlib.pyplot as plt
+
+with open("output_dynesty.pkl", "rb") as f:
+    output = pickle.load(f)
+
+sampler = output["sampling"]
+
+chain = sampler.get_chain()
+flat_chain = sampler.get_chain(flat=True)
+log_prob = sampler.get_log_prob(flat=True)
+
+ndim = flat_chain.shape[1]
+print("ndim:", ndim)
+
+# adjust this list to match ndim
+theta_labels =  theta_labels = ["mass", "logzsol", "dust2", "tage", "tau", "sigma_smoot","dust_index"] #"sigma_smooth","dust_index"]
+print("labels:", theta_labels)
+
+# trace plot
+fig, axes = plt.subplots(ndim, 1, figsize=(10, 2*ndim))
+for i, (ax, label) in enumerate(zip(axes, theta_labels)):
+    ax.plot(chain[:, :, i], alpha=0.3)
+    ax.set_ylabel(label)
+axes[-1].set_xlabel("iteration")
+plt.tight_layout()
+plt.savefig("trace_emcee.png", dpi=150)
+
+# corner plot
+from prospect.plotting import corner
+cfig, caxes = plt.subplots(ndim, ndim, figsize=(10,9))
+caxes = corner.allcorner(flat_chain.T, theta_labels, caxes, color="royalblue", show_titles=True)
+plt.savefig("corner_emcee.png", dpi=150)
+
+
+#DYNESTY IS BELOW
+"""
+
 with open("output_dynesty.pkl", "rb") as f:
     output_dynesty = pickle.load(f)
 
@@ -40,10 +79,8 @@ cfig, axes = plt.subplots(ndim, ndim, figsize=(10,9))
 axes = corner.allcorner(chain.T, theta_labels, axes, weights=weights, color="royalblue", show_titles=True)
 for ax in axes[:,0]:
     ax.set_xscale('log')
-    """ax.xaxis.set_major_locator(LogLocator(base=10, numticks=3))
-    ax.xaxis.set_minor_formatter(NullFormatter())
-    ax.tick_params(axis='x', labelsize=8, rotation=30)"""
+    
 
 plt.tight_layout()
 
-plt.savefig("corner.png", dpi=150)
+plt.savefig("corner.png", dpi=150)"""
