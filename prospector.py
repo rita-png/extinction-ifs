@@ -201,12 +201,10 @@ model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 2} # Calzetti dust curve
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
-model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
+#model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
 
 # priors for optimize=true # free
 #model_params.update(TemplateLibrary["spectral_smoothing"])
-
-RUN BC I FINALLY MADE SIGMA SMOOTH BE FIXED
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 270.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
 
 
@@ -215,7 +213,7 @@ model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors
 model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
 model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
 model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
+#model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
 
 #
 
@@ -370,11 +368,11 @@ model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]
 """
 
 model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e4)}
-model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-0.6, maxi=0.6)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=1.8)}
+model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=2.4)}
 model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
 model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
+#model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
 
 
 
