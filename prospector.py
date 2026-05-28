@@ -31,7 +31,7 @@ from functions import *
 #     compare what params cigale and prospector outputs
 
 
-#binnign in wavelenght! ttry, give uncertainties, use photometry
+# use photometry
 
 
 #pick the galaxy accordign to whatever i have data from cosmos2020 and also MUSE
@@ -72,6 +72,7 @@ from prospect.sources import CSPSpecBasis #use FastStepBasis for parametric SFH
 import astropy.io.fits as fits
 from prospect.io import write_results as writer
 from prospect.io import read_results as reader
+from matplotlib.patches import Rectangle
 
 #import data
 file_name="../DATA/SN2001el.fits"#SN2010ev.fits" 
@@ -127,6 +128,33 @@ err_sum = np.sqrt(np.nansum(region_err**2, axis=(1, 2))) / (len(region[0][0]) * 
 flux = (flux_sum / 1e20) * wave**2 * 3.34e4 / 3631.0
 err  = (err_sum  / 1e20) * wave**2 * 3.34e4 / 3631.0
 err = np.clip(err, a_min=0.1 * np.nanmedian(flux), a_max=None) #NOVO
+
+# plot image of galaxy
+galaxy_img = np.nansum(cube, axis=0)
+
+fig, ax = plt.subplots(figsize=(8, 8))
+im = ax.imshow(galaxy_img,origin='lower',cmap='Blues_r')
+# drawing the selected 10x10 region
+rect = Rectangle(
+    (x_min, y_min),           # lower-left corner
+    x_max - x_min,            # width
+    y_max - y_min,            # height
+    linewidth=2,
+    edgecolor='cyan',
+    facecolor='none'
+)
+
+ax.add_patch(rect)
+ax.scatter(x_center, y_center, color='white', s=40, marker='x')
+ax.set_title("NGC1448 with Selected 10x10 Region",fontsize=18)
+ax.set_xlabel("X Pixel",fontsize=18)
+ax.set_ylabel("Y Pixel",fontsize=18)
+cbar = plt.colorbar(im, ax=ax)
+cbar.set_label("Flux")
+
+plt.tight_layout()
+plt.savefig('galaxy.png', dpi=150, bbox_inches='tight')
+plt.close()
 
 # emission lines to mask (rest-frame wavelengths in Angstroms)
 emission_lines = {
@@ -198,7 +226,7 @@ from prospect.models.templates import TemplateLibrary
 model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 
 # priors for optimize=true # fixed
-model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 2} # Calzetti dust curve
+model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 0} # Calzetti dust curve
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
@@ -210,10 +238,10 @@ model_params["zred"]["isfree"] = False
 
 model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e2, maxi=1e5)}
 model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=4.0)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6.0)}
 model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
 model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-#model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
+model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
 
 #
 
@@ -366,15 +394,22 @@ model_params["tau"]["prior"]        = priors.LogUniform(mini=max(0.1, theta_best
 model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]-1.0), maxi=min(0.4, theta_best[6]+1.0))
 
 """
-
+#for center or image
 model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e4)}
 model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
 model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=2.4)}
 model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
 model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+
+#for offset location
+"""model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e4, 'prior': priors.LogUniform(mini=1e3, maxi=1e7)}
+model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=4.4)}
+model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
 #model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
-
-
+"""
 
 model = SedModel(model_params)
 
@@ -385,7 +420,7 @@ model = SedModel(model_params)
 fitting_kwargs = dict(nlive_init=50, nested_method="rwalk", nested_target_n_effective=50, nested_dlogz_init=0.5) #100 100 5
 
 #for emcee
-fitting_kwargs = dict(nwalkers=32,nburn=[500],niter=1000)
+fitting_kwargs = dict(nwalkers=4*32,nburn=[30],niter=1000)
 
 
 #output_dynesty = fit_model(observations, model, sps, noise=noise_model, nested_sampler='dynesty', optimize=False, **fitting_kwargs, verbose=True)

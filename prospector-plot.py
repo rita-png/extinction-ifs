@@ -21,7 +21,7 @@ ndim = flat_chain.shape[1]
 print("ndim:", ndim)
 
 # adjust this list to match ndim
-theta_labels =  theta_labels = ["mass", "logzsol", "dust2", "tage", "tau", "sigma_smoot","dust_index"] #"sigma_smooth","dust_index"]
+theta_labels =  theta_labels = ["mass", "logzsol", "dust2", "tage", "tau", "dust_index","sigma_smooth"] #"sigma_smooth","dust_index"]
 print("labels:", theta_labels)
 
 # trace plot
