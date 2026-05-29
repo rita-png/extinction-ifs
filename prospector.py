@@ -104,9 +104,14 @@ wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
 print("Raw flux range:", np.nanmin(cube[0]), np.nanmax(cube[0]))
 print("Header BUNIT:", header.get('BUNIT', 'not found'))
 
+region_choice=int(2);
+if region_choice==1:
+    print("Using the central 10x10 region of the galaxy")
+    x_center, y_center = int(x_len/2), int(y_len/2)
+elif region_choice==2:
+    print("Using an offset 10x10 region of the galaxy")
+    x_center, y_center = 150, 40
 
-
-x_center, y_center = int(x_len/2), int(y_len/2)
 x_half, y_half = 10,10 #300, 300
 
 x_min = x_center - x_half
@@ -226,7 +231,7 @@ from prospect.models.templates import TemplateLibrary
 model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 
 # priors for optimize=true # fixed
-model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 0} # Calzetti dust curve
+model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 0}
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
@@ -394,22 +399,24 @@ model_params["tau"]["prior"]        = priors.LogUniform(mini=max(0.1, theta_best
 model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]-1.0), maxi=min(0.4, theta_best[6]+1.0))
 
 """
-#for center or image
-model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e4)}
-model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=2.4)}
-model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
-model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
 
-#for offset location
-"""model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e4, 'prior': priors.LogUniform(mini=1e3, maxi=1e7)}
-model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
-model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=4.4)}
-model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
-model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-#model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=0.4)}
-"""
+if region_choice==1:
+    # priors to fit the spectra of region 1
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e4)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=2.4)}
+    model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+    model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+elif region_choice==2:
+# priors to fit the spectra of region 2
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 8e3, 'prior': priors.LogUniform(mini=1e2, maxi=5e6)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=2.4)}
+    model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+    model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+
 
 model = SedModel(model_params)
 
@@ -434,25 +441,62 @@ from prospect.io import write_results as writer
 
 
 import pickle
-try:#nested_sampler='dynesty'
+"""try:#nested_sampler='dynesty'
     output_dynesty = fit_model(observations, model, sps, noise=noise_model, emcee=True, optimize=False, **fitting_kwargs, verbose=True)
 finally:
     # saves results, even if fitting was keyboard interrupted
-    """writer.write_hdf5(hfile, {}, model, observations,
-                     output_dynesty["sampling"], None,
-                     sps=sps,
-                     tsample=0.0,#tsample=output_dynesty["sampling"][1],
-                     toptimize=0.0)"""
     
     if output_dynesty is not None:
         with open("output_dynesty.pkl", "wb") as f:
             pickle.dump(output_dynesty, f)
         print("Saved!")
     else:
+        print("Nothing to save")"""
+
+
+try:
+    output_dynesty = fit_model(
+        observations, model, sps,
+        noise=noise_model,
+        emcee=True,
+        optimize=False,
+        **fitting_kwargs,
+        verbose=True
+    )
+
+finally:
+    if output_dynesty is not None:
+
+        # save results to a pickle file
+
+        with open("output_dynesty.pkl", "wb") as f:
+            pickle.dump(output_dynesty, f)
+
+        print("Saved!")
+
+        # PLOT SPECTRUM
+        sampler = output_dynesty["sampling"]
+        flat_chain = sampler.get_chain(flat=True)
+        theta_med = np.median(flat_chain, axis=0)
+
+        spec, mfrac = model.predict(theta_med, observations=observations, sps=sps)
+
+        plt.figure(figsize=(10,5))
+        plt.plot(observations[0].wavelength, observations[0].flux, label="Observed", alpha=0.6)
+        plt.plot(observations[0].wavelength, np.squeeze(spec), label="Median model", lw=2)
+
+        plt.xlabel("Wavelength")
+        plt.ylabel("Flux")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig('MEDIAN_SPECTRUM.png', dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print("Median spectrum plotted and saved as MEDIAN_SPECTRUM.png")
+        
+
+    else:
         print("Nothing to save")
-
-
-
 
 # # # # # # # # # # # # # # # # CIGALE
 

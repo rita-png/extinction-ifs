@@ -20,6 +20,32 @@ log_prob = sampler.get_log_prob(flat=True)
 ndim = flat_chain.shape[1]
 print("ndim:", ndim)
 
+#get the median values of the parameters
+"""theta_med = np.median(flat_chain, axis=0)
+print(theta_med)
+print(output.keys())
+model = output["model"]
+obs   = output["obs"]
+sps   = output["sps"]
+spec, phot, mfrac = model.predict(theta_med, obs=obs, sps=sps)
+
+plt.figure(figsize=(10,5))
+
+# plot observed spectrum
+if obs["wavelength"] is not None:
+    plt.plot(obs["wavelength"], obs["spectrum"], label="Observed", alpha=0.7)
+
+# plot modelled spectrum
+plt.plot(obs["wavelength"], spec, label="Median model", lw=2)
+
+plt.xlabel("Wavelength")
+plt.ylabel("Flux")
+plt.legend()
+plt.tight_layout()
+plt.savefig("median_spectrum.png", dpi=150)
+plt.show()"""
+
+
 # adjust this list to match ndim
 theta_labels =  theta_labels = ["mass", "logzsol", "dust2", "tage", "tau", "dust_index","sigma_smooth"] #"sigma_smooth","dust_index"]
 print("labels:", theta_labels)
