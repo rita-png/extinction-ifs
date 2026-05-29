@@ -104,7 +104,7 @@ wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
 print("Raw flux range:", np.nanmin(cube[0]), np.nanmax(cube[0]))
 print("Header BUNIT:", header.get('BUNIT', 'not found'))
 
-region_choice=int(2);
+region_choice=int(1);
 if region_choice==1:
     print("Using the central 10x10 region of the galaxy")
     x_center, y_center = int(x_len/2), int(y_len/2)
@@ -231,7 +231,7 @@ from prospect.models.templates import TemplateLibrary
 model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 
 # priors for optimize=true # fixed
-model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 0}
+model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4}
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
@@ -239,7 +239,6 @@ model_params["zred"]["isfree"] = False
 # priors for optimize=true # free
 #model_params.update(TemplateLibrary["spectral_smoothing"])
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 270.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
-
 
 model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e2, maxi=1e5)}
 model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
@@ -402,20 +401,20 @@ model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]
 
 if region_choice==1:
     # priors to fit the spectra of region 1
-    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e4)}
-    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
-    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=1.1, maxi=2.4)}
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
     model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
     model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
 elif region_choice==2:
 # priors to fit the spectra of region 2
-    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 8e3, 'prior': priors.LogUniform(mini=1e2, maxi=5e6)}
-    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1, maxi=1)}
-    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=2.4)}
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 8e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
     model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
     model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
-    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
 
 
 model = SedModel(model_params)
