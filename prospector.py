@@ -104,7 +104,7 @@ wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
 print("Raw flux range:", np.nanmin(cube[0]), np.nanmax(cube[0]))
 print("Header BUNIT:", header.get('BUNIT', 'not found'))
 
-region_choice=int(1);
+region_choice=int(2);
 if region_choice==1:
     print("Using the central 10x10 region of the galaxy")
     x_center, y_center = int(x_len/2), int(y_len/2)
