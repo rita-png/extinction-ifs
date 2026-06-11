@@ -1,0 +1,344 @@
+def run_prospector(spectrum,unc,wave):
+
+    
+    from functions import *
+
+
+    import os
+    os.environ['SPS_HOME'] = '../fsps'
+
+    #os.environ['SPS_HOME'] = '/home/rita13santos/PhD/fsps'
+    import prospect
+    print(prospect.__version__)
+
+    import fsps
+    import dynesty
+    import sedpy
+    import h5py, astropy
+    import numpy as np
+    import astroquery
+
+
+    # import prospector packages
+    from sedpy.observate import load_filters
+    #from prospect.utils.obsutils import fix_obs
+    from prospect.observation.obsutils import fix_obs
+    from prospect.models.templates import TemplateLibrary
+    #from prospect.models.sedmodel import SedModel
+    from prospect.models.sedmodel import SpecModel as SedModel
+    from prospect.models import priors
+    from prospect.sources import CSPSpecBasis #use FastStepBasis for parametric SFH
+
+
+    # Importing data
+
+    #from prospect.fitting import fit_model;
+    #help(fit_model)
+    import astropy.io.fits as fits
+    from prospect.io import write_results as writer
+    from prospect.io import read_results as reader
+    from matplotlib.patches import Rectangle
+
+    #import data
+
+    # new flux and uncertainties in maggies!
+    flux = (spectrum / 1e20) * wave**2 * 3.34e4 / 3631.0
+    err  = (unc  / 1e20) * wave**2 * 3.34e4 / 3631.0
+    err = np.clip(err, a_min=0.1 * np.nanmedian(flux), a_max=None) #NOVO
+
+
+    # emission lines to mask (rest-frame wavelengths in Angstroms)
+    emission_lines = {
+        'Halpha':  6562.8,
+        'Hbeta':   4861.3,
+        'Hgamma':  4340.5,
+        'Hdelta':  4101.7,
+        'OII':     3727.0,
+        'OIII_1':  4958.9,
+        'OIII_2':  5006.8,
+        'NII_1':   6548.0,
+        'NII_2':   6583.0,
+        'SII_1':   6716.0,
+        'SII_2':   6731.0,
+        'OI':      6300.0,
+    }
+
+    absorption_lines = { #telluric lines from the milky way
+        'O2':    7620,
+        'H2O':   9300
+    }
+
+    # mask width in Angstroms (rest-frame)
+    mask_width = 30.0
+    mask = np.ones(len(wave), dtype=bool)
+    for line_name, line_wave in emission_lines.items():
+        
+        # shift to observed frame
+        line_wave_obs = line_wave * (1 + z)
+        mask &= np.abs(wave - line_wave_obs) > mask_width
+        #print(f"Masking {line_name} at {line_wave_obs:.1f} Å")
+
+    for line_name, line_wave in absorption_lines.items(): 
+        mask &= np.abs(wave - line_wave) > mask_width
+
+    #binning in wavelength
+    bin_factor = 10
+    n_bins = np.int_(len(wave) / bin_factor)
+
+    wave = wave[:n_bins*bin_factor].reshape(n_bins, bin_factor)
+    wave = wave.mean(axis=1)
+
+    flux = flux[:n_bins*bin_factor].reshape(n_bins, bin_factor)
+    flux = flux.mean(axis=1)
+
+    err = err[:n_bins*bin_factor].reshape(n_bins, bin_factor)
+    err = err.mean(axis=1)
+
+    mask = mask[:n_bins*bin_factor].reshape(n_bins, bin_factor)
+    mask = mask.all(axis=1)
+
+    # build observation in new prospector version
+    from prospect.observation import Spectrum
+
+    obs = Spectrum(
+        wavelength=np.array(wave, dtype=np.float64),
+        spectrum=np.array(flux, dtype=np.float64),
+        unc=np.array(err, dtype=np.float64),
+        redshift=z,
+        mask=mask & np.isfinite(flux) #masking the emission lines and any NaNs
+    )
+
+    observations = [obs]
+
+    print("Clip threshold:", 0.15 * np.nanmedian(obs['spectrum']))
+    print("Unc min:", np.nanmin(obs['unc']))
+
+    # set model
+
+    from prospect.models.templates import TemplateLibrary
+
+    #  priors for optimize=true #
+    model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
+
+    # priors for optimize=true # fixed
+    model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4}
+    model_params["zred"]["init"] = z
+    model_params["zred"]["isfree"] = False
+    #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}
+
+    # priors for optimize=true # free
+    #model_params.update(TemplateLibrary["spectral_smoothing"])
+    #model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 270.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
+
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e4, 'prior': priors.LogUniform(mini=1e2, maxi=1e9)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6.0)}
+    model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+    model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
+
+    #
+
+    sps = CSPSpecBasis(zcontinuous=1)#CSPSpecBasis(zcontinuous=1)
+    model = SedModel(model_params) #initializing the model based on the parameters we defined
+    print("The model is\n\n", model)
+
+
+    ########
+    
+    #mass: Total stellar mass formed (in solar masses)
+    #logzsol: Logarithmic metallicity
+    #dust2:  V-band dust attenuation (like A_V)
+    #tage: Age of the galaxy (time since star formation began)
+    #tau: Star formation timescale (for parametric SFHs, like τ-model)
+    #dust_index:Slope of the dust curve (like R_V; only used with dust_type=2)
+
+
+
+    noise_model = (None, None) #i HAVE TO CHANGE THIS, A tuple of NoiseModel objects for the spectroscopy and photometry respectively. Can also be (None, None) in which case simple chi-square will be used
+
+
+
+    spec, mfrac = model.predict(model.theta, observations=observations, sps=sps)
+
+    
+    plt.plot(obs.wavelength[obs.mask], obs.flux[obs.mask], label='data')
+    plt.plot(obs.wavelength, spec[0], label='model')
+    plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
+    plt.legend()
+    plt.savefig('intial-guesses-for-optimize.png', dpi=150, bbox_inches='tight')
+    plt.show(block=True)
+
+    #
+
+    # make a prediction
+    print("\nParameter values used to make a prediction model are ", model.theta)
+
+
+    #generate synthetic photometry and spectroscopy (a Model SED) for a given set of stellar population parameters
+
+    current_parameters = ",".join([f"{p}={v}" for p, v in zip(model.free_params, model.theta)])
+
+
+
+
+    # fit
+    print("Fitting with OPTIMIZE")
+
+    from prospect.fitting import lnprobfn, fit_model
+
+    fitting_kwargs = dict(nlive_init=100, nested_method="rwalk", nested_target_n_effective=100, nested_dlogz_init=2) #400, 100, 0.05
+
+    output = fit_model(observations, model, sps, noise=noise_model, dynesty=False, optimize=True, **fitting_kwargs,verbose=True)
+    # for optimize==True, results are here:
+    result = output["optimization"]
+
+
+    theta_best = output["optimization"][0][0].x
+    print("Best fit parameters from optimization:")
+    for name, val in zip(model.free_params, theta_best):
+        print(f"  {name}: {val}")
+
+
+
+    # plot best fit (frooptimize==True)
+    spec, mfrac = model.predict(theta_best, observations=observations, sps=sps)
+
+    plt.figure()
+    plt.plot(obs.wavelength[obs.mask], obs.flux[obs.mask], label='data')
+    plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
+    plt.plot(obs.wavelength, spec[0], label='best fit')
+    plt.legend()
+    plt.savefig('best_fit_optimize.png', dpi=150)
+    plt.show(block=True)
+
+
+    print("\nUsing these best fit parameters as initial values for dynesty sampling, to get the posterior distribution of the parameters\n")
+    print("###### dynesty fitting ######")
+    # set initial values for dynesty from optimze fit
+    for i, (name, val) in enumerate(zip(model.free_params, theta_best)):
+        model_params[name]["init"] = val
+
+    # tighten priors around best fit values
+    """model_params["mass"]["prior"]       = priors.LogUniform(mini=max(1e1, theta_best[0]/10), maxi=min(1e10, theta_best[0]*10))
+    model_params["logzsol"]["prior"]    = priors.TopHat(mini=max(-2.0, theta_best[1]-0.3), maxi=min(0.19, theta_best[1]+0.3))
+    model_params["dust2"]["prior"]      = priors.TopHat(mini=max(0.0, theta_best[2]-0.5), maxi=min(4.0, theta_best[2]+0.5))
+    model_params["tage"]["prior"]       = priors.TopHat(mini=max(0.1, theta_best[3]-4.0), maxi=min(13.8, theta_best[3]+4.0))
+    model_params["tau"]["prior"]        = priors.LogUniform(mini=max(0.1, theta_best[4]/10), maxi=min(30, theta_best[4]*10))
+    #model_params["sigma_smooth"]["prior"] = priors.TopHat(mini=max(50, theta_best[5]/5), maxi=min(500, theta_best[5]*5))
+    model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]-1.0), maxi=min(0.4, theta_best[6]+1.0))
+
+    """
+
+    """if region_choice==1:
+        # priors to fit the spectra of region 1
+        model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
+        model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+        model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
+        model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+        model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+        model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
+    elif region_choice==2:
+    # priors to fit the spectra of region 2
+        model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 8e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
+        model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+        model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
+        model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
+        model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+        model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
+    """
+
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': theta_best[0], 'prior': priors.LogUniform(mini=5e2, maxi=1e8)}
+    model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+    model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
+    model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.001, maxi=13.8)}
+    model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+    model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3, maxi=0.4)}#mini was -2.2
+    model = SedModel(model_params)
+
+    # reinitialize model with new inits
+    model = SedModel(model_params)
+
+    #for dynesty
+    fitting_kwargs = dict(nlive_init=50, nested_method="rwalk", nested_target_n_effective=50, nested_dlogz_init=0.5) #100 100 5
+
+    #for emcee
+    fitting_kwargs = dict(nwalkers=4*32,nburn=[30],niter=1000)
+
+
+    #output_dynesty = fit_model(observations, model, sps, noise=noise_model, nested_sampler='dynesty', optimize=False, **fitting_kwargs, verbose=True)
+    output_dynesty = None
+    #hfile = "./quickstart_dynesty_mcmc.h5"
+    from prospect.io import write_results as writer
+
+
+    ###########
+
+
+
+    import pickle
+    """try:#nested_sampler='dynesty'
+        output_dynesty = fit_model(observations, model, sps, noise=noise_model, emcee=True, optimize=False, **fitting_kwargs, verbose=True)
+    finally:
+        # saves results, even if fitting was keyboard interrupted
+        
+        if output_dynesty is not None:
+            with open("output_dynesty.pkl", "wb") as f:
+                pickle.dump(output_dynesty, f)
+            print("Saved!")
+        else:
+            print("Nothing to save")"""
+
+
+    try:
+        output_dynesty = fit_model(
+            observations, model, sps,
+            noise=noise_model,
+            emcee=True,
+            optimize=False,
+            **fitting_kwargs,
+            verbose=True
+        )
+
+    finally:
+        if output_dynesty is not None:
+
+            # save results to a pickle file
+
+            with open("output_dynesty.pkl", "wb") as f:
+                pickle.dump(output_dynesty, f)
+
+            print("Saved!")
+
+            # PLOT SPECTRUM
+            sampler = output_dynesty["sampling"]
+            flat_chain = sampler.get_chain(flat=True)
+            theta_med = np.median(flat_chain, axis=0)
+
+            spec, mfrac = model.predict(theta_med, observations=observations, sps=sps)
+
+            plt.figure(figsize=(10,5))
+            plt.plot(observations[0].wavelength, observations[0].flux, label="Observed", alpha=0.6)
+            plt.plot(observations[0].wavelength, np.squeeze(spec), label="Median model", lw=2)
+            plt.scatter(observations[0].wavelength[~observations[0].mask], observations[0].flux[~observations[0].mask], color='red', label='excluded', s=20)
+
+            plt.xlabel("Wavelength")
+            plt.ylabel("Flux")
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig('MEDIAN_SPECTRUM.png', dpi=150, bbox_inches='tight')
+            plt.close()
+            
+            print("Median spectrum plotted and saved as MEDIAN_SPECTRUM.png")
+            
+
+        else:
+            print("Nothing to save")
+
+    # # # # # # # # # # # # # # # # CIGALE
+
+    """
+    graphs
+    parametric or non parametric SFH? (i am doing non parametric)
+    get_ipython().set_next_input('what values should i use for my prior');get_ipython().run_line_magic('pinfo', 'prior')
+    """

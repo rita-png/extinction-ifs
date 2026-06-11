@@ -1,40 +1,19 @@
 #import prospect
 """
-confirmar se é preciso corrigir o redshift
-
 param de resolucao do espetro deixar livre
 
 200 ou 500 interacoes no dynasty
 
 redshfit livre
-
-mask emission lines"""
-
-
-
-
+"""
 
 
 from functions import *
 
-#use 1/10 galaxy mass OR use full integrated light
-#take a look at the manual
 
 # to do:
-# 
-# use photometry
-#     
-#     inspect what choices i can do in the model (w/ w/out dust idk)
-#     
-#     install cigale
-#     
+#
 #     compare what params cigale and prospector outputs
-
-
-# use photometry
-
-
-#pick the galaxy accordign to whatever i have data from cosmos2020 and also MUSE
 
 
 import os
@@ -50,8 +29,6 @@ import sedpy
 import h5py, astropy
 import numpy as np
 import astroquery
-
-
 
 
 # import prospector packages
@@ -75,9 +52,9 @@ from prospect.io import read_results as reader
 from matplotlib.patches import Rectangle
 
 #import data
-file_name="../DATA/SN2001el.fits"#SN2010ev.fits" 
-#z=0.009213#redshift of SN2010ev host (NGC3244)
-z=0.003896#redshift of SN2001el host (NGC1448)
+file_name="../DATA/SN2010ev.fits"#SN2001el.fits" 
+z=0.009213#redshift of SN2010ev host (NGC3244)
+#z=0.003896#redshift of SN2001el host (NGC1448)
 
 
 
@@ -177,6 +154,11 @@ emission_lines = {
     'OI':      6300.0,
 }
 
+absorption_lines = { #telluric lines from the milky way
+    'O2':    7620,
+    'H2O':   9300
+}
+
 # mask width in Angstroms (rest-frame)
 mask_width = 30.0
 mask = np.ones(len(wave), dtype=bool)
@@ -186,13 +168,16 @@ for line_name, line_wave in emission_lines.items():
     line_wave_obs = line_wave * (1 + z)
     mask &= np.abs(wave - line_wave_obs) > mask_width
     #print(f"Masking {line_name} at {line_wave_obs:.1f} Å")
-    
+
+for line_name, line_wave in absorption_lines.items(): 
+    mask &= np.abs(wave - line_wave) > mask_width
+
 print(f"\nTotal wavelengths: {len(wave)}")
 print(f"Masked wavelengths: {np.sum(~mask)}")
 print(f"Remaining wavelengths: {np.sum(mask)}")
 
 #binning in wavelength
-bin_factor = 10
+bin_factor = 5
 n_bins = np.int_(len(wave) / bin_factor)
 
 wave = wave[:n_bins*bin_factor].reshape(n_bins, bin_factor)
@@ -240,7 +225,7 @@ model_params["zred"]["isfree"] = False
 #model_params.update(TemplateLibrary["spectral_smoothing"])
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': True,'init': 270.0, 'units': 'km/s','prior': priors.TopHat(mini=50, maxi=500)}
 
-model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e2, maxi=1e5)}
+model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e4, 'prior': priors.LogUniform(mini=1e2, maxi=1e9)}
 model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
 model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6.0)}
 model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
@@ -318,9 +303,10 @@ print("IMPORTANT\n\nData max:  ", np.nanmax(obs.flux))
 print("Model max: ", np.nanmax(spec[0]))
 print("Ratio:     ", np.nanmax(obs.flux) / np.nanmax(spec[0]))
 
-
+print("IMPORTANT\n\n ", obs.wavelength[~obs.mask])
 plt.plot(obs.wavelength[obs.mask], obs.flux[obs.mask], label='data')
 plt.plot(obs.wavelength, spec[0], label='model')
+plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
 plt.legend()
 plt.savefig('intial-guesses-for-optimize.png', dpi=150, bbox_inches='tight')
 plt.show(block=True)  # block=True forces the script to wait
@@ -336,14 +322,6 @@ print("\nParameter values used to make a prediction model are ", model.theta)
 
 current_parameters = ",".join([f"{p}={v}" for p, v in zip(model.free_params, model.theta)])
 
-
-"""
-plt.title("Synthetic spectra (for the stellar population) produced from the input parameters")
-plt.plot(wave, spec)
-plt.show()
-"""
-
-print("Inspect this, these are the model bounds for the parameters, if they are too wide the fit will not converge to a given solution: ")
 
 for name, bounds in zip(model.free_params, model.theta_bounds()):
     print(name, bounds)
@@ -376,7 +354,8 @@ spec, mfrac = model.predict(theta_best, observations=observations, sps=sps)
 
 plt.figure()
 plt.plot(obs.wavelength[obs.mask], obs.flux[obs.mask], label='data')
-plt.plot(obs.wavelength, spec[0], label='best fit')  # spec is now a list
+plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
+plt.plot(obs.wavelength, spec[0], label='best fit')
 plt.legend()
 plt.savefig('best_fit_optimize.png', dpi=150)
 plt.show(block=True)
@@ -399,7 +378,7 @@ model_params["dust_index"]["prior"] = priors.TopHat(mini=max(-3.0, theta_best[6]
 
 """
 
-if region_choice==1:
+"""if region_choice==1:
     # priors to fit the spectra of region 1
     model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e3, 'prior': priors.LogUniform(mini=1e3, maxi=1e6)}
     model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
@@ -415,8 +394,14 @@ elif region_choice==2:
     model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.01, maxi=13.8)}
     model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
     model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
+"""
 
-
+model_params["mass"]    = {'N': 1, 'isfree': True, 'init': theta_best[0], 'prior': priors.LogUniform(mini=5e2, maxi=1e8)}
+model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-1.5, maxi=1.5)}
+model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6)}
+model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.001, maxi=13.8)}
+model_params["tau"]     = {'N': 1, 'isfree': True, 'init': 0.42,  'prior': priors.LogUniform(mini=0.1, maxi=30)}
+model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3, maxi=0.4)}#mini was -2.2
 model = SedModel(model_params)
 
 # reinitialize model with new inits
@@ -483,6 +468,7 @@ finally:
         plt.figure(figsize=(10,5))
         plt.plot(observations[0].wavelength, observations[0].flux, label="Observed", alpha=0.6)
         plt.plot(observations[0].wavelength, np.squeeze(spec), label="Median model", lw=2)
+        plt.scatter(observations[0].wavelength[~observations[0].mask], observations[0].flux[~observations[0].mask], color='red', label='excluded', s=20)
 
         plt.xlabel("Wavelength")
         plt.ylabel("Flux")

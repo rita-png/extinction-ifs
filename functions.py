@@ -532,9 +532,9 @@ def circular_aperture_sum(cube, x_center, y_center, radius):
 def sum_submatrix(matrix,row_i,col_i,row_width,col_width): #row_i,col_i,number of rows, number of cols
     row_width-=1
     #print(matrix[row_i:row_i+row_width+1, col_i:col_i+col_width])
-    return np.sum(matrix[row_i:row_i+row_width+1, col_i:col_i+col_width])
+    return np.nansum(matrix[row_i:row_i+row_width+1, col_i:col_i+col_width])
 
-def binning(image, pix_width): #this ignores the existence of NaNs
+def binning(image, pix_width): #this handles the existence of NaNs
     
     
     x_len=len(image[0])
@@ -559,6 +559,22 @@ def binning(image, pix_width): #this ignores the existence of NaNs
                 
     return matrix
 
+# bin in all wavelengths
+
+def bin_cube(cube, pix_width):
+    nz, ny, nx = cube.shape
+    pix=pix_width
+    
+    ny_trim = (ny // pix) * pix
+    nx_trim = (nx // pix) * pix
+
+    cube = cube[:, :ny_trim, :nx_trim]
+
+    return cube.reshape(
+        nz,
+        ny_trim // pix, pix,
+        nx_trim // pix, pix
+    ).sum(axis=(2, 4))
 
 # masking out stars
 
