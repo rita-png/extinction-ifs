@@ -576,6 +576,20 @@ def bin_cube(cube, pix_width):
         nx_trim // pix, pix
     ).sum(axis=(2, 4))
 
+def bin_mask(mask, pix_width):
+    ny, nx = mask.shape
+    pix = pix_width
+
+    ny_trim = (ny // pix) * pix
+    nx_trim = (nx // pix) * pix
+
+    mask = mask[:ny_trim, :nx_trim]
+
+    return mask.reshape(
+        ny_trim // pix, pix,
+        nx_trim // pix, pix
+    ).any(axis=(1, 3))
+    
 # masking out stars
 
 
