@@ -18,3 +18,5 @@ milky-way/__pycache__/
 quickplots.ipynbenv-extinction
 .python-version
 .ipynb_checkpoints/
+env-extinction/
+host-galaxy/results/
