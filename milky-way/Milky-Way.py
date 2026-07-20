@@ -68,8 +68,6 @@ CDELT = float(header["CD3_3"])
 CRPIX = float(header["CRPIX3"])
 wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
 
-
-
 na_rest=(5890+5896)/2
 index=findWavelengths(wave, na_rest)[1]
 
