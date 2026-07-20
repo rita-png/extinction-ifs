@@ -15,4 +15,6 @@ milky-way/.ipynb_checkpoints/
 __pycache__/
 milky-way/__pycache__/
 *.pyc
-quickplots.ipynb
+quickplots.ipynbenv-extinction
+.python-version
+.ipynb_checkpoints/
