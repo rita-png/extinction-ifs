@@ -6,7 +6,9 @@ param de resolucao do espetro deixar livre
 
 redshfit livre
 """
-
+// func to delete number from array
+def delete_number_from_array(array, number):
+    return [x for x in array if not (x == number)] 
 
 from functions import *
 
@@ -216,7 +218,7 @@ from prospect.models.templates import TemplateLibrary
 model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 
 # priors for optimize=true # fixed
-model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4}
+    model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4}
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}

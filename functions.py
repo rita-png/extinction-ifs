@@ -500,8 +500,10 @@ def circular_aperture_median(cube, star_coords, radius):
 def circular_aperture_sum(cube, x_center, y_center, radius):
     r = int(np.ceil(radius))
     pixels = []
-    stacked_spectrum = np.zeros(cube.shape[0])
-    valid_pixel_count = 0
+
+    spectra = []
+    #stacked_spectrum = np.zeros(cube.shape[0])
+    #valid_pixel_count = 0
 
     for dx in range(-r, r + 1):
         for dy in range(-r, r + 1):
@@ -513,20 +515,27 @@ def circular_aperture_sum(cube, x_center, y_center, radius):
                 if 0 <= x < cube.shape[2] and 0 <= y < cube.shape[1]:
                     spectrum = cube[:, y, x]
                     
-                    if not np.any(np.isnan(spectrum)):
-                        stacked_spectrum += spectrum
-                        valid_pixel_count += 1
-                        pixels.append((x, y))
+                    #if not np.any(np.isnan(spectrum)):
+                    spectra.append(spectrum)
+                    #valid_pixel_count += 1
+                    pixels.append((x, y))
 
-    if valid_pixel_count > 0:
+    """if valid_pixel_count > 0:
         stacked_spectrum = stacked_spectrum
     else:
-        stacked_spectrum[:] = np.nan
+        stacked_spectrum[:] = np.nan"""
 
-    print("Valid pixels count: ",valid_pixel_count)
+    valid_pixel_count = len(spectra)   
 
-    
-    return stacked_spectrum,pixels
+    if valid_pixel_count > 0:
+        stacked_spectrum = np.nansum(spectra, axis=0)
+    else:
+        stacked_spectrum = np.full(cube.shape[0], np.nan)
+
+    print("Valid pixels count: ", valid_pixel_count)
+
+    return stacked_spectrum, pixels
+
 ## binning ##
 
 def sum_submatrix(matrix,row_i,col_i,row_width,col_width): #row_i,col_i,number of rows, number of cols
@@ -1801,7 +1810,7 @@ def estimate_spec_err(x_cont,y_cont,interp):
     residuals = y_cont - interp(x_cont)
     yerr = np.sqrt(np.mean(residuals**2))
 
-    print("The corrected flux error now is ", yerr)
+    #print("The corrected flux error now is ", yerr)
     return yerr
 
     
@@ -1902,7 +1911,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
         
-        print("NEW MAR2026 KS IS ",KS)
+        #print("NEW MAR2026 KS IS ",KS)
         interp=interp1d(x_cont, cont, kind='cubic')
 
 
