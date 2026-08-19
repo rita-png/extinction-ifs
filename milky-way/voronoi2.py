@@ -16,22 +16,26 @@ from functions import *
 
 bootstrap=False
 
-def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wavelength,width,mw_mask,best_window,best_KS):
-    
 
 
-    x_len=len(cube[0][0])
-    y_len=len(cube[0])
+def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name, z, wavelength, width, mw_mask, best_window, best_KS, results_dir=None, save_temp=False):
+    """Perform Voronoi binning and compute EWs per bin.
 
-    index=findWavelengths(wave, wavelength)[1]
+    Writes diagnostic PDFs into `results_dir` and only writes temporary npy files
+    when `save_temp` is True.
+    """
 
-    ## Voronoi binning ##
-    y_center=int(y_len/2)
-    x_center=int(x_len/2)
+    x_len = len(cube[0][0])
+    y_len = len(cube[0])
+
+    index = findWavelengths(wave, wavelength)[1]
+
+    # Voronoi binning setup
+    y_center = int(y_len / 2)
+    x_center = int(x_len / 2)
 
     data = region_chopped_Na
-
-    i=findWavelengths(new_wave, wavelength)[1]
+    i = findWavelengths(new_wave, wavelength)[1]
 
     ny, nx = data[i].shape
     yy, xx = np.mgrid[0:ny, 0:nx]
@@ -40,7 +44,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     xy = np.column_stack([x, y])
 
     signal = data[i].ravel()
-    noise  = errcube[i].ravel()
+    noise = errcube[i].ravel()
 
     additive = False
 
@@ -51,12 +55,14 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     target_sn = snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
     print("The target SNR is ", target_sn)
 
-    plt.hist(snr, bins=50, edgecolor='black')
+    """plt.hist(snr, bins=50, edgecolor='black')
     plt.xlabel("SNR")
     plt.ylabel("Frequency")
     plt.show()
-    plt.savefig("DATA/"+SN_name+"/"+"temp_histogram.pdf", bbox_inches='tight')
-
+    plt.savefig(os.path.join(results_dir, 'temp_histogram.pdf'), bbox_inches='tight')
+    """
+    
+    
     ###trying out binning in f/c
     """kernel_size=100
     start_time = time.time()
@@ -128,24 +134,12 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     # Perform the binning. The target is target_sn**2 to match the capacity definition.
     pow = PowerBin(xy, capacity_spec, target_capacity=target_sn**2)
 
-    # Plot the results. We use capacity_scale='sqrt' to display S/N instead of (S/N)^2.
-    #pow.plot(capacity_scale='sqrt', ylabel='S/N')
-    #plt.savefig("DATA/"+SN_name+"/"+"NEWVoronoi_bins.pdf", bbox_inches='tight')
-    #plt.close()
-
-
-
-    ## converting the output into a binned image
-    bin_index = pow.xybin
-
-    aux=pow.bin_num
-
-
+    # build bin map
     bin_map = pow.bin_num.reshape(ny, nx)
 
     img = data[i]
     binned_img = np.zeros_like(img)
-    EWs_map_bins=np.zeros_like(img)
+    EWs_map_bins = np.zeros_like(img)
 
     n_bins = len(pow.bin_capacity) #number of bins
 
@@ -153,124 +147,82 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
     
     centroids = []
-
     EWs = []
     EW_errs = []
     center_y = ny / 2
     center_x = nx / 2
 
-    k=0
-
-    ####bin_fluxes = np.full(n_bins, np.nan)
-    ####bins_used = []
     all_bin_spectra = []
+
+    k = 0
     for b in range(n_bins):
         mask = (bin_map == b)
 
         #just 2d image of wavelength of the absorption line
         binned_img[mask] = np.median(img[mask])
-        ####bin_fluxes[b] = np.median(img[mask])
 
-
-        
-        #binning the spectra ONLY in bins that do not include MW stars
+        # skip bins that include MW stars
         if np.any(~mw_mask & mask):
-            k+=1
+            k += 1
             continue
 
-        print("WARNING REMOCE THE FOLLOWIGN LINES")#only saving the good bins, w/out stars
         bin_pixels = data[:, mask]
         bin_pixels_err = errcube[:, mask]
-        aux=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
+        aux = np.nansum(bin_pixels, axis=1)
         all_bin_spectra.append(aux)
-        ##
 
-        bin_pixels = data[:, mask]
-        bin_pixels_err = errcube[:, mask]
-
-        
-        spectra_of_bin=np.nansum(bin_pixels, axis=1)#np.nanmedian(bin_pixels, axis=1)#print("ATENCAO, a fazermedian em vez de sum")
-        
+        spectra_of_bin = np.nansum(bin_pixels, axis=1)
 
         ys, xs = np.where(mask)
-        distances = np.sqrt((xs - center_x)**2 + (ys - center_y)**2)
-        dist=np.average(distances)
+        distances = np.sqrt((xs - center_x) ** 2 + (ys - center_y) ** 2)
+        dist = np.average(distances)
         bin_x = np.mean(xs)
         bin_y = np.mean(ys)
 
-        #computing EWs
-        if bootstrap==True:
-            spectra_of_bin_err  = bootstrap_error_on_sum(bin_pixels)
-            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,spectra_err_per_bin=spectra_of_bin_err,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+        bins_dir = os.path.join(results_dir, 'bins_spectra')
+        os.makedirs(bins_dir, exist_ok=True)
+
+        if bootstrap:
+            spectra_of_bin_err = bootstrap_error_on_sum(bin_pixels)
+            a, b, foo = EW_voronoi_bins(np.array([spectra_of_bin]), new_wave, wavelength, spectra_err_per_bin=spectra_of_bin_err, v=best_window, KS=best_KS, plots=True, text=False, save=os.path.join(bins_dir, f'x{int(bin_x)}y{int(bin_y)}.pdf'))
         else:
-            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save="DATA/"+SN_name+"/bins_spectra/x"+str(int(bin_x))+"y"+str(int(bin_y))+".pdf")
+            bins_dir = os.path.join(results_dir, 'bins_spectra')
+            os.makedirs(bins_dir, exist_ok=True)
+            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
         
 
         if not np.isnan(a[0]):
             EWs.append(a[0])
             EW_errs.append(b[0])
             centroids.append(dist)
-            ####bins_used.append(b)
-
         else:
             print("Detected emission in wavelength of the absorption line!")
 
-        
-
         EWs_map_bins[mask] = a
 
-        """if a[0]>0.05:
-
-            auxmask = np.zeros((y_len, x_len), dtype=bool)
-            auxmask[y_center-width:y_center+width,x_center-width:x_center+width] = mask
-            
-
-            bin_pixels = cube[:, auxmask]
-
-
-            spectra_of_bin=np.nansum(bin_pixels, axis=1)
-            
-            aux=[wave, spectra_of_bin]
-            np.save("DATA/"+SN_name+"/outliers/"+str(round(a[0], 2))+".npy",aux)"""        
-            
-
-    print("WARNING REMOCE THE FOLLOWIGN LINES")
     all_bin_spectra = np.array(all_bin_spectra)
-    np.save("DATA/"+SN_name+"/temp/"+"all_bin_spectra.npy", all_bin_spectra)
-    np.save("DATA/"+SN_name+"/temp/"+"bin_map.npy", bin_map)
-    np.save("DATA/"+SN_name+"/temp/"+"binned_img.npy", binned_img)
-    np.save("DATA/"+SN_name+"/temp/"+"EWs_map_bins.npy", EWs_map_bins)
+    if save_temp:
+        temp_dir = os.path.join(results_dir, 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        np.save(os.path.join(temp_dir, 'all_bin_spectra.npy'), all_bin_spectra)
+        np.save(os.path.join(temp_dir, 'bin_map.npy'), bin_map)
+        np.save(os.path.join(temp_dir, 'binned_img.npy'), binned_img)
+        np.save(os.path.join(temp_dir, 'EWs_map_bins.npy'), EWs_map_bins)
 
-    
-
-    EWs=np.asarray(EWs)
-    EW_errs=np.asarray(EW_errs)
+    EWs = np.asarray(EWs)
+    EW_errs = np.asarray(EW_errs)
     centroids = np.array(centroids)
     EWs, EW_errs = EWs[~np.isnan(EWs)], EW_errs[~np.isnan(EW_errs)]
 
+    print("Excluded ", k, " bins for including fluxes of the MW stars")
 
-    #spectra_per_bin=np.array(spectra_per_bin)
-
-    print("Excluded ",k, " bins for including fluxes of the MW stars")
-
-    # excluding bins with low flux
-    """flux_thresh = 0.5 * np.nanmedian(bin_fluxes)
-    bins_used = np.asarray(bins_used, dtype=int)
-    good = bin_fluxes[bins_used] >= flux_thresh
-    EWs = EWs[good]
-    EW_errs = EW_errs[good]
-    centroids = centroids[good]"""
-
-
-
-    #np.save("DATA/"+SN_name+"/"+"temp_EW_measurements.npy",np.column_stack((EWs, EW_errs)))
-
+    
     SNRs=np.divide(EWs,EW_errs)
     
 
 
     # excluding bins with SNR<0
-    temp=len(EWs)
+    """temp=len(EWs)
     good = (SNRs > 0)
     
     EWs = EWs[good]
@@ -279,7 +231,7 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     centroids = centroids[good]
 
     if temp!=len(EWs):
-        print("Excluded ",  temp-len(EWs)," bins for having SNR<0")
+        print("Excluded ",  temp-len(EWs)," bins for having SNR<0")"""
 
     y = np.array(EWs)
     sigma = np.array(EW_errs)
@@ -294,12 +246,10 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
 
     fig, ax = plt.subplots(2, 1, figsize=(22, 16))
-
-
-    scatter=ax[0].errorbar(centroids, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5,zorder=1)
-    scatter=ax[0].scatter(centroids, EWs, c=SNRs,s=50, edgecolors='black', alpha=1,zorder=2)
-    cbar=fig.colorbar(scatter, ax=ax[0])#plt.colorbar(scatter)
-    cbar.set_label('SNR', fontsize=20) 
+    scatter = ax[0].errorbar(centroids, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5, zorder=1)
+    scatter = ax[0].scatter(centroids, EWs, c=SNRs, s=50, edgecolors='black', alpha=1, zorder=2)
+    cbar = fig.colorbar(scatter, ax=ax[0])
+    cbar.set_label('SNR', fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[0].set_xlabel("Distance from image center (px)",fontsize=20)
     ax[0].set_ylabel("EW",fontsize=20)
@@ -317,10 +267,10 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     )
     ax[0].tick_params(axis='both', which='major', labelsize=15)
 
-    scatter=ax[1].errorbar(SNRs, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5,zorder=1)
-    scatter=ax[1].scatter(SNRs, EWs, c=SNRs,s=50, edgecolors='black', alpha=1,zorder=2)
-    cbar=fig.colorbar(scatter, ax=ax[1])#ax[1].colorbar(scatter)
-    cbar.set_label('SNR', fontsize=20) 
+    scatter = ax[1].errorbar(SNRs, EWs, yerr=EW_errs, alpha=0.75, fmt='o', c='Blue', capsize=5, zorder=1)
+    scatter = ax[1].scatter(SNRs, EWs, c=SNRs, s=50, edgecolors='black', alpha=1, zorder=2)
+    cbar = fig.colorbar(scatter, ax=ax[1])
+    cbar.set_label('SNR', fontsize=20)
     cbar.ax.tick_params(labelsize=20)
     ax[1].set_xlabel("SNR of line measurement",fontsize=20)
     ax[1].set_ylabel("EW",fontsize=20)
@@ -338,12 +288,12 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
 
 
 
-    plt.savefig("DATA/"+SN_name+"/"+"Voronoi_bins_EWs.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir, 'Voronoi_bins_EWs.pdf'), bbox_inches='tight')
     plt.show()
 
 
 
-    ## plotting the binned image
+    # plotting the binned image and maps
     fig, ax = plt.subplots(1, 3, figsize=(30, 8))
 
     ####
@@ -381,8 +331,8 @@ def binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,wav
     cbar.set_label("EW", fontsize=20)
     ax[2].contour(mw_mask.astype(int), levels=[0.5], colors='red', linewidths=1.5)
 
-    plt.savefig("DATA/"+SN_name+"/"+"Voronoi_bins.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir, 'Voronoi_bins.pdf'), bbox_inches='tight')
     plt.close()
 
-
+    return centroids, EWs, EW_errs
     return centroids, EWs, EW_errs

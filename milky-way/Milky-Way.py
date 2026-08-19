@@ -10,6 +10,16 @@ import functions
 importlib.reload(functions)
 from functions import *
 
+# CLI flags: --force recomputes caches, --resume explicitly reuses caches
+import argparse
+parser = argparse.ArgumentParser(description='Milky-Way processing')
+parser.add_argument('--force', action='store_true', help='Recompute and overwrite cached .npy files')
+parser.add_argument('--resume', action='store_true', help='Reuse existing cached .npy files when available (default)')
+parser.add_argument('--save-temp', action='store_true', help='Write temporary npy files (into /auxiliar-results)')
+args = parser.parse_args()
+if args.force and args.resume:
+    parser.error('Cannot use both --force and --resume')
+
 
 SN_name="SN2010ev"#"SN2007cq"#"ASASSN-14ad"#
 
@@ -44,7 +54,13 @@ elif SN_name=="LSQ12ca":
     ra,dec=82.765114,	-19.801537
     z=0.098752
 
-file_name="DATA/"+SN_name+"/"+SN_name+".fits"
+# Minimal: assume local DATA root ../../DATA
+DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'DATA'))
+data_dir_sn = os.path.join(DATA_ROOT, SN_name)
+os.makedirs(data_dir_sn, exist_ok=True)
+results_dir = os.path.join(data_dir_sn, 'auxiliar-results')
+os.makedirs(results_dir, exist_ok=True)
+file_name = os.path.join(data_dir_sn, SN_name + '.fits')
 
 
 data = fits.open(file_name)
@@ -64,7 +80,7 @@ CRVAL = float(header["CRVAL3"])
 NAXIS = int(header["NAXIS3"])
 CDELT = float(header["CD3_3"])
 CRPIX = float(header["CRPIX3"])
-wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
+wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) + 1 - CRPIX))
 
 na_rest=(5890+5896)/2
 index=findWavelengths(wave, na_rest)[1]
@@ -73,28 +89,26 @@ index=findWavelengths(wave, na_rest)[1]
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
-#print("WARNING REMOCE THE FOLLOWIGN LINES")#change to 70 again
-width=70#150
+width=70
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
 region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
 
 
 # import cube of uncertainties
-
-if os.path.exists("DATA/"+SN_name+"/"+"errcube.npy"):
-    errcube = np.load("DATA/"+SN_name+"/"+"errcube.npy")
+if (not args.force) and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
+    errcube = np.load(os.path.join(data_dir_sn, 'errcube.npy'))
     print("Read the error cube from a npy file")
     print(np.shape(errcube)) #this has to be the same (the uncertainty cube is computted for the region of interest only)
     print(np.shape(region[0]),"\n^^^^^^^^^^^^^^")
 else:
     errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
-    np.save("DATA/"+SN_name+"/"+"errcube.npy",errcube)
+    if args.resume and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
+        # resume requested but file missing due to --force earlier; continue
+        pass
+    np.save(os.path.join(data_dir_sn, 'errcube.npy'),errcube)
 
 
 ##
-
-
-
 
 
 stacked_cube=np.nanmedian(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##i was doing sum
@@ -119,8 +133,7 @@ sources = daofind(image - median)
 # filter by compactness
 #sources = sources[sources['peak'] / sources['npix'] > 1]
 
-
-x_coords, y_coords = sources['xcentroid'], sources['ycentroid']
+x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
 print("We have detected ", len(sources)," sources!")
 
 ##this is just needed for sn2010ev
@@ -227,8 +240,8 @@ if image.ndim == 3:
 ## saving output of create_star_mask
 
 masked_cube,mask=create_star_mask(cube, star_coords, radius=10)
-np.save("DATA/"+SN_name+"/masked_cube.npy", masked_cube)
-np.save("DATA/"+SN_name+"/mask.npy", mask)
+np.save(os.path.join(results_dir, 'masked_cube.npy'), masked_cube)
+np.save(os.path.join(results_dir, 'mask.npy'), mask)
 mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
 
 
@@ -241,28 +254,27 @@ print("\nOriginal image had ", ny*nx," pixels, the one after masking MW stars ha
 lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
 plt.contour(mask, levels=[0.5], colors='red', linewidths=1, origin='lower')
 plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig("DATA/"+SN_name+"/MW-masked-cube.pdf", bbox_inches='tight')
+plt.savefig(os.path.join(data_dir_sn, 'MW-masked-cube.pdf'), bbox_inches='tight')
 plt.close()
 
 ## background plot
 
-spec = np.nansum(cube[:,50:100,0:25], axis=(1, 2))
-EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/background.pdf")
+"""spec = np.nansum(cube[:,50:100,0:25], axis=(1, 2))
+EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(data_dir_sn, 'background.pdf'))"""
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
 print("\nComputing sum spectra of all spaxels, excluding MW stars")
 
-if os.path.exists("DATA/"+SN_name+"/whole_masked_cube_spec.npy"):
-    spec = np.load("DATA/"+SN_name+"/whole_masked_cube_spec.npy")
+if (not args.force) and os.path.exists(os.path.join(results_dir, 'whole_masked_cube_spec.npy')):
+    spec = np.load(os.path.join(results_dir, 'whole_masked_cube_spec.npy'))
     print("Read the masked cube from a npy file")
-
 else:
     spec = np.nansum(masked_cube, axis=(1, 2))
-    np.save("DATA/"+SN_name+"/whole_masked_cube_spec.npy", spec)
+    np.save(os.path.join(results_dir, 'whole_masked_cube_spec.npy'), spec)
     
 
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/MW-single-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
 EW_all,ERR_all=out[0][0],out[1][0]
 
 
@@ -271,7 +283,7 @@ EW_all,ERR_all=out[0][0],out[1][0]
 # random subset of spaxels, excluding MW stars
 """subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 spec = np.nansum(subset_cube, axis=1)
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/MW-subset-line-measurement.pdf")
+out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(data_dir_sn,'MW-subset-line-measurement.pdf'))
 
 ##
 
@@ -299,7 +311,7 @@ plt.ylabel(" EW for a given subset of pixels",fontsize=15)
 yy,ybar=weighted_average(EWs,EW_errs)
 plt.axhline(y=yy)
 plt.axhspan(yy - ybar, yy + ybar,alpha=0.1)
-plt.savefig("DATA/"+SN_name+"/MW-diff-subsets-line-measurement.pdf", bbox_inches='tight')
+plt.savefig(os.path.join(results_dir,'MW-diff-subsets-line-measurement.pdf'), bbox_inches='tight')
 plt.close()
 
 
@@ -339,8 +351,8 @@ for size in sizes:
     weighted_EWs.append(yy)
     weighted_EW_errs.append(ybar)
 
-np.save("DATA/"+SN_name+"/weighted_EWs.npy", weighted_EWs)
-np.save("DATA/"+SN_name+"/weighted_EW_errs.npy", weighted_EW_errs)
+    np.save(os.path.join(results_dir, 'weighted_EWs.npy'), weighted_EWs)
+    np.save(os.path.join(results_dir, 'weighted_EW_errs.npy'), weighted_EW_errs)
 
 #
 
@@ -350,7 +362,7 @@ plt.axhspan(EW_all - ERR_all, EW_all + ERR_all,alpha=0.1)
 plt.xlabel("Sizes S",fontsize=15)
 plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
-plt.savefig("DATA/"+SN_name+"/MW-inspecting-subset-sizes.pdf", bbox_inches='tight')
+plt.savefig(os.path.join(results_dir, 'MW-inspecting-subset-sizes.pdf'), bbox_inches='tight')
 plt.close()"""
 #####
 
@@ -380,7 +392,7 @@ for obj in candidate_galaxies:
     
     print(a,b)
 
-plt.savefig("DATA/"+SN_name+"/Kron-ellipse.pdf", bbox_inches='tight')
+plt.savefig(os.path.join(results_dir, 'Kron-ellipse.pdf'), bbox_inches='tight')
 plt.close()
 
 ny, nx = data.shape
@@ -410,7 +422,7 @@ masked_err_cube = np.where(mask, errcube, np.nan)
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 #spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
 
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save="DATA/"+SN_name+"/Kron-ellipse-spectrum.pdf")
+out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
@@ -420,13 +432,18 @@ continuum_bound_w_max=new_wave[-1]
 print(type(continuum_bound_w_min), continuum_bound_w_min)
 print(type(continuum_bound_w_max), continuum_bound_w_max)
 
-best_KS = best_continuum(wave, spectrum, na_rest,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save="DATA/"+SN_name+"/Best-continuum.pdf")
+best_KS = best_continuum(wave, spectrum, na_rest,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
 
 # inspect best window
-best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save="DATA/"+SN_name+"/Best-window.pdf")
+best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save=os.path.join(results_dir,'Best-window.pdf'))
 
 ## Isophotes
 if isophotes==True:
+    # create expected output subfolders so saves won't fail
+    for _d in ('isophotes-spec-sum', 'isophotes-spec-median'):
+        os.makedirs(os.path.join(results_dir, _d), exist_ok=True)
+
+
     ny, nx = data_sub.shape
     x0, y0 = nx / 2, ny / 2
 
@@ -500,7 +517,7 @@ if isophotes==True:
     ax4.imshow(residual, origin='lower',clim=(lo,up))
     ax4.set_title('Residual')
 
-    plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir,'isophotes.pdf'), bbox_inches='tight')
 
     plt.close()
 
@@ -525,7 +542,7 @@ if isophotes==True:
         ax.plot(x, y, color='white')
 
 
-    plt.savefig("DATA/"+SN_name+"/isophotes.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(data_dir_sn,'isophotes.pdf'), bbox_inches='tight')
 
     plt.close()"""
 
@@ -561,9 +578,10 @@ if isophotes==True:
             k+=1
             if k==1:
                 print("OUTPUTTING SPEC OF SMALLEST SMA")
-                np.save("DATA/"+SN_name+"/temp_window_cont.npy", np.column_stack((wave, spec)))
+                if args.save_temp:
+                    np.save(os.path.join(results_dir,'temp_window_cont.npy'), np.column_stack((wave, spec)))
 
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-sum/"+str(int(sma))+".pdf")
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'isophotes-spec-sum',str(int(sma))+'.pdf'))
             EWs_sum.append(out[0][0])
             EW_errs_sum.append(out[1][0])
 
@@ -574,7 +592,7 @@ if isophotes==True:
         if np.any(np.isnan(spec[index-100:index+100])):
             print("Spectrum is empty / all NaNs, skipping")
         else:
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/isophotes-spec-median/"+str(int(sma))+".pdf")
+            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'isophotes-spec-median',str(int(sma))+'.pdf'))
             EWs_median.append(out[0][0])
             EW_errs_median.append(out[1][0])
 
@@ -601,7 +619,7 @@ if isophotes==True:
     ax[1].set_xlabel("Semi major axis",fontsize=12)
     ax[1].set_ylabel("SNR",fontsize=12)
 
-    plt.savefig("DATA/"+SN_name+"/isophotes_EWs_sum.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir,'isophotes_EWs_sum.pdf'), bbox_inches='tight')
     plt.close()
 
     final_EW_sum_isophotes = EWs_sum[np.argmax(np.divide(EWs_sum, EW_errs_sum))]
@@ -625,7 +643,7 @@ if isophotes==True:
     ax[1].set_xlabel("Semi major axis",fontsize=12)
     ax[1].set_ylabel("SNR",fontsize=12)
 
-    plt.savefig("DATA/"+SN_name+"/isophotes_EWs_median.pdf", bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir,'isophotes_EWs_median.pdf'), bbox_inches='tight')
     plt.close()
 
     #final_EW_median_isophotes = EWs_median[np.argmax(np.divide(EWs_median, EW_errs_median))]
@@ -639,9 +657,9 @@ if isophotes==True:
 """
 
 ## EWs of random subsets of pixels ##
-if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
-    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
-    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
+    if (not args.force) and os.path.exists(os.path.join(results_dir,'weighted_EWs.npy')):
+    weighted_EWs = np.load(os.path.join(results_dir,'weighted_EWs.npy'))
+    weighted_EW_errs = np.load(os.path.join(results_dir,'weighted_EW_errs.npy'))
 
 else:
     
@@ -660,13 +678,13 @@ else:
             EWs.append(out[0][0])
             EW_errs.append(out[1][0])
             if size==3366 and i==1:
-                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save="DATA/"+SN_name+"/example-spectrum.pdf")
+                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'example-spectrum.pdf'))
             
         yy,ybar=weighted_average(EWs,EW_errs)
         weighted_EWs.append(yy)
         weighted_EW_errs.append(ybar)
-    np.save("DATA/"+SN_name+"/weighted_EWs.npy", weighted_EWs)
-    np.save("DATA/"+SN_name+"/weighted_EW_errs.npy", weighted_EW_errs)
+    np.save(os.path.join(results_dir,'weighted_EWs.npy'), weighted_EWs)
+    np.save(os.path.join(results_dir,'weighted_EW_errs.npy'), weighted_EW_errs)
 
 
 plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
@@ -679,7 +697,7 @@ plt.axhspan(EW_ellipse - ERR_ellipse, EW_ellipse + ERR_ellipse,alpha=0.1, color=
 plt.xlabel("Sizes S",fontsize=15)
 plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
 plt.legend()
-plt.savefig("DATA/"+SN_name+"/All-MW-EW measurements.pdf", bbox_inches='tight')
+plt.savefig(os.path.join(results_dir,'All-MW-EW measurements.pdf'), bbox_inches='tight')
 plt.close()
 
 """
@@ -693,15 +711,14 @@ plt.close()
 
 import voronoi2
 
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS)#,target_sn = target_snr)#750 for f/c#250
+centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS, results_dir=results_dir,save_temp=args.save_temp)#,target_sn = target_snr)#750 for f/c#250
 
 plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
-
-plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
-#plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
-
-plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
-#plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
-plt.savefig("DATA/"+SN_name+"/All-EW-values.pdf", bbox_inches='tight')
+if isophotes==True:
+    plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
+    #plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
+    #plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
+    #plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
+plt.savefig(os.path.join(data_dir_sn,'All-EW-values.pdf'), bbox_inches='tight')
 plt.close()

@@ -46,7 +46,7 @@ CRVAL = float(header["CRVAL3"])
 NAXIS = int(header["NAXIS3"])
 CDELT = float(header["CD3_3"])
 CRPIX = float(header["CRPIX3"])
-wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
+wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) + 1 - CRPIX))
 
 
 

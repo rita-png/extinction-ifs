@@ -36,7 +36,7 @@ def return_matched_MW_stars(file_name,SN_name,z,ra,dec):
     NAXIS = int(header["NAXIS3"])
     CDELT = float(header["CD3_3"])
     CRPIX = float(header["CRPIX3"])
-    wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) - CRPIX))
+    wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) + 1 - CRPIX))
 
 
 

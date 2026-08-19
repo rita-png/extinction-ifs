@@ -1804,7 +1804,7 @@ def estimate_spec_err(x_cont,y_cont,interp):
     for k in range(len(y_cont)):
         yerr_wrong+=(y_cont[k]-interp(x_cont[k]))**2
         yerr_wrong=np.sqrt(yerr_wrong)
-    print("The wrong flux error was ", yerr_wrong)
+    #print("The wrong flux error was ", yerr_wrong)
 
     
     residuals = y_cont - interp(x_cont)
@@ -2073,14 +2073,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         
         if text:
 
-            print(f"\nEW= {area_over_continuum:.2f}"," +/- ", err)
+            print(f"\nEW = {area_over_continuum:.2f}"," +/- ", err)
             
 
-            print(f"\nNode separation = ", nodesep, " Angstrom")
+            #print(f"\nNode separation = ", nodesep, " Angstrom")
 
             
-            #print("SNR of the line is ", np.max(cont-y)/erro[np.argmax(cont-y)])
-            print("SNR of the line is ", area_over_continuum/err)
+            #print("SNR of the line is ", area_over_continuum/err)
 
         EW_array.append(area_over_continuum)
         EW_err_array.append(err)
