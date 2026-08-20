@@ -114,7 +114,7 @@ plt.close()
 
 spectra_per_bin,err_per_bin = apply_voronoi_to_cube(data,errcube,voronoi_bins[1])
 #print(spectra_per_bin)
-aqui
+#aqui
 EWs, EW_errs, foo = EW_voronoi_bins(spectra_per_bin, new_wave,na_rest,v=400,plots=True,text=False)#EW_voronoi_bins(spectra_per_bin, new_wave, err_per_bin,na_rest,v=400,plots=True)
 SNRs=np.divide(EWs,EW_errs)
 

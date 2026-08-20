@@ -10,6 +10,12 @@ import functions
 importlib.reload(functions)
 from functions import *
 
+# for gaussian fits
+import sympy as sp
+from IPython.display import display, Math, HTML
+from astropy.table import Table
+import sympy as sp
+
 # CLI flags: --force recomputes caches, --resume explicitly reuses caches
 import argparse
 parser = argparse.ArgumentParser(description='Milky-Way processing')
@@ -99,7 +105,7 @@ if (not args.force) and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy'))
     errcube = np.load(os.path.join(data_dir_sn, 'errcube.npy'))
     print("Read the error cube from a npy file")
     print(np.shape(errcube)) #this has to be the same (the uncertainty cube is computted for the region of interest only)
-    print(np.shape(region[0]),"\n^^^^^^^^^^^^^^")
+    print(np.shape(region[0]))
 else:
     errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
     if args.resume and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
@@ -240,7 +246,7 @@ if image.ndim == 3:
 ## saving output of create_star_mask
 
 masked_cube,mask=create_star_mask(cube, star_coords, radius=10)
-np.save(os.path.join(results_dir, 'masked_cube.npy'), masked_cube)
+#np.save(os.path.join(results_dir, 'masked_cube.npy'), masked_cube)
 np.save(os.path.join(results_dir, 'mask.npy'), mask)
 mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
 
@@ -711,9 +717,9 @@ plt.close()
 
 import voronoi2
 
-centroids_vor, EWs_vor, EW_errs_vor = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS, results_dir=results_dir,save_temp=args.save_temp)#,target_sn = target_snr)#750 for f/c#250
+centroids_vor, EWs_vor, EW_errs_vor, spectra_and_bins = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS, results_dir=data_dir_sn,save_temp=args.save_temp)#,target_sn = target_snr)#750 for f/c#250
 
-plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
+"""plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
 if isophotes==True:
     plt.axhline(y=final_EW_sum_isophotes,label="EW from isophote (sum)")
@@ -721,4 +727,281 @@ if isophotes==True:
     #plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
     #plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
 plt.savefig(os.path.join(data_dir_sn,'All-EW-values.pdf'), bbox_inches='tight')
-plt.close()
+plt.close()"""
+
+
+
+## Gaussian fits to the Na i D line
+
+normalization=True####False##########################################True
+voronoi=True
+
+#import data
+spec_voronoi_bins, bin_map, EWs_map_bins, binned_img = spectra_and_bins
+        
+
+
+MODELS = {
+    # Re-map to only run two models: A -> original H, B -> original J
+    "A": (modelH, [-200, -150]),  # was H
+    "B": (modelJ, [-200, -150, 10]),  # was J
+}
+
+results = {name: {"bic": [], "chi2r": [], "params": [], "models": []} for name in MODELS}
+
+mask_wave     = (new_wave > na_rest - 18) & (new_wave < na_rest + 18)
+wave_fit = new_wave[mask_wave]
+continuum_bins = []
+
+for i in range(len(spec_voronoi_bins)):
+    print("bin ",i)
+
+    # finding the continuum of each bin
+    print("\nFinding the continuum of each bin")
+
+    x,y=new_wave,spec_voronoi_bins[i]
+
+    x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
+
+    # continuum
+    delta_x = np.average(np.diff(x_cont))  # spacing in Å between x points
+        
+    kernel_size=best_KS
+    kernel = cosine_kernel(kernel_size)
+    cont = convolve1d(y_cont, kernel, mode='nearest')
+    interp=interp1d(x_cont, cont, kind='cubic',fill_value="extrapolate")
+        
+    continuum=interp(new_wave)
+    continuum_bins.append(continuum)
+
+
+
+    ## subtracting the continuum to the bin spectra
+    flux     = spec_voronoi_bins[i] - continuum
+    flux_fit = flux[mask_wave]
+    n=0
+    
+    for name, (model_fn, p0) in MODELS.items():
+        #n+=1
+        #print("N", n)
+        try:
+            popt, _ = curve_fit(
+                model_fn, wave_fit, flux_fit,
+                p0=p0,
+                #bounds=MODEL_BOUNDS[name],
+                maxfev=20000
+            )
+            mflux = model_fn(wave_fit, *popt)
+            results[name]["bic"].append(compute_bic(flux_fit, mflux, len(popt)))
+            results[name]["chi2r"].append(compute_reduced_chi2(flux_fit, mflux, len(popt)))
+            results[name]["params"].append(popt)
+            results[name]["models"].append(mflux)
+        except RuntimeError:
+            results[name]["bic"].append(np.nan)
+            results[name]["chi2r"].append(np.nan)
+            results[name]["params"].append(None)
+            results[name]["models"].append(None)
+
+rows = []
+for name in MODELS:
+    model_fn, _ = MODELS[name]
+    n_params   = model_fn.__code__.co_argcount - 1
+    bics       = np.array(results[name]["bic"],   dtype=float)
+    chi2s      = np.array(results[name]["chi2r"], dtype=float)
+    bic_median = np.nanmedian(bics)
+    bic_mad    = np.nanmean(np.abs(bics - bic_median))
+    chi2_med   = np.nanmedian(chi2s)
+    chi2_mad   = np.nanmean(np.abs(chi2s - chi2_med))
+    n_failed   = int(np.sum(np.isnan(bics)))
+    rows.append((name, n_params, f"{bic_median:.1f} ± {bic_mad:.1f}",
+                 f"{chi2_med:.3f} ± {chi2_mad:.3f}", n_failed))
+
+table = Table(rows=rows,
+              names=["Model", "N_params", "BIC (median ± MAD)", "χ²ᵣ (median ± MAD)", "N_failed"])
+table.pprint(max_width=-1)
+
+
+x = len(spec_voronoi_bins)
+
+
+for model_name, (model_fn, _) in MODELS.items():
+    model_params = results[model_name]["params"]
+    model_fluxes = results[model_name]["models"]
+    EWs_corr, EWs_ori = [], []
+    ncols = int(np.ceil(np.sqrt(x)))
+    nrows = int(np.ceil(x / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(35, 25), sharex=True, sharey=True)
+    axes = np.array(axes).reshape(-1)
+    for bin_id in range(x):
+        ax = axes[bin_id]
+        if model_params[bin_id] is None:
+            ax.set_title(f"Bin {bin_id} [FAILED]", fontsize=14, color="red")
+            continue
+        popt      = model_params[bin_id]
+        mflux     = model_fn(wave_fit, *popt)
+        data      = spec_voronoi_bins[bin_id] - continuum_bins[bin_id]
+        continuum = continuum_bins[bin_id][mask_wave]
+
+        if model_name == "A":
+            emission_model   = np.zeros_like(wave_fit)
+            absorption_model = mflux.copy()
+        elif model_name == "B":
+            # params: A1, A2, A3 — all sigmas fixed, all mu fixed
+            A3, mu3, sigma3  = popt[-1], 5893, SIGMA_FIXED
+            emission_model   = gaussian(wave_fit, abs(A3), mu3, sigma3)
+            absorption_model = mflux - emission_model
+
+        ax.plot(new_wave, data, color="black", linewidth=2, alpha=0.5, label="Data")
+        ax.plot(wave_fit, mflux, color="red", linewidth=2, linestyle="dashed", label="Model")
+        ax.plot(wave_fit, absorption_model, color="blue", linewidth=2,
+                linestyle="dashed", label="Model w/out emission")
+        bic_val  = results[model_name]["bic"][bin_id]
+        chi2_val = results[model_name]["chi2r"][bin_id]
+        ax.set_title(f"Bin {bin_id}  |  BIC={bic_val:.1f}  χ²ᵣ={chi2_val:.2f}", fontsize=14)
+        ax.legend(fontsize=12)
+        ax.set_xlim(na_rest - 30, na_rest + 30)
+        ax.set_ylim(np.min(data) * 1.05, np.max(data) * 1.05)
+        ax.tick_params(axis="both", labelsize=14)
+        EWs_corr.append(-np.trapezoid(absorption_model / continuum, wave_fit))
+        EWs_ori.append(-np.trapezoid(data[mask_wave] / continuum, wave_fit))
+
+    for ax in axes[x:]:
+        ax.axis("off")
+    safe_name = model_name.replace(" ", "_").replace("—", "-")
+    fig.suptitle(model_name, fontsize=24, y=1.01)
+    fig.supxlabel("Wavelength", fontsize=20)
+    fig.supylabel("Flux", fontsize=20)
+    plt.tight_layout()
+    plt.savefig(os.path.join(data_dir_sn,f"BIN_fits_{safe_name}.pdf"), bbox_inches='tight')
+    plt.show()
+    print(f"Saved: BIN_fits_{safe_name}.pdf")
+    results[model_name]["EWs_corr"] = EWs_corr
+    results[model_name]["EWs_ori"]  = EWs_ori
+
+
+np.shape(EWs_ori)==np.shape(EWs_corr)
+np.shape(EWs_ori)
+
+
+
+x_s, A1, A2, A3 = sp.symbols('x A_1 A_2 A_3')
+mu1, mu2, mu3 = sp.symbols('mu_1 mu_2 mu_3')
+sigma1, sigma2, sigma3 = sp.symbols('sigma_1 sigma_2 sigma_3')
+sM = sp.Symbol('sigma_{MUSE}')
+delta = sp.Symbol('delta')
+
+def G(A, mu, sigma):
+    return A * sp.exp(-((x_s - mu)**2) / (2 * sigma**2))
+
+na1 = sp.Symbol('mu_{Na,1}')
+na2 = sp.Symbol('mu_{Na,2}')
+
+models_sym = {
+    "A": G(A1, na1,  sM)    + G(A2, na2, sM),
+    "B": G(A1, na1,  sM)    + G(A2, na2, sM)                     + G(A3, 5893, sM)
+}
+
+# free parameters and fixed constraints per model
+param_notes = {
+    
+    "A": ("$A_1, A_2$",
+          "$\\mu_1, \\mu_2$ fixed to Na doublet,  $\\sigma_1 = \\sigma_2 = \\sigma_\\mathrm{MUSE}$,  no emission"),
+    "B": ("$A_1, A_2, A_3$",
+          "$\\mu_1, \\mu_2$ fixed to Na doublet,  $\\sigma_1 = \\sigma_2 = \\sigma_3 = \\sigma_\\mathrm{MUSE}$,  $\\mu_3 = 5893$ Å")
+}
+
+for name in MODELS:
+    expr = models_sym[name]
+    n_params = MODELS[name][0].__code__.co_argcount - 1
+    display(HTML(f"<h4 style='margin-bottom:2px'>Model {name} &nbsp;|&nbsp; {n_params} free parameters</h4>"))
+    display(Math(r'f(x) = ' + sp.latex(expr)))
+    free, fixed = param_notes[name]
+    display(HTML(
+        f"<p style='margin-left:20px; font-size:13px; color:#333'>"
+        f"<b>Free:</b> {free} &nbsp;|&nbsp; <b>Fixed:</b> <span style='color:gray'>{fixed}</span>"
+        f"</p>"
+    ))
+
+##### EW histogram for best model with 5-sigma clipping 
+best_model_name = min(
+    MODELS.keys(),
+    key=lambda name: (
+        #np.nanmedian(results[name]["bic"]),
+        np.nanmedian(results[name]["chi2r"])
+    )
+)
+print(f"Best model: {best_model_name}\n Do WE WANT TO FORCE IT TO BE MODEL B? If so, uncomment the line below.")
+
+#best_model_name='B'
+
+colors = [plt.cm.Set1(i) for i in [0, 1, 2]]
+colors = ['#E74C3C', '#3498DB', '#2ECC71']  # red, blue, green
+
+
+
+
+def sigma_clip(arr, nsigma=2):
+    arr  = np.array(arr)
+    med  = np.median(arr)
+    std  = np.std(arr)
+    mask = np.abs(arr - med) < nsigma * std
+    n_clipped = np.sum(~mask)
+    if n_clipped:
+        print(f"  Clipped {n_clipped} outliers beyond {nsigma}σ")
+    return arr[mask]
+
+EWs_ori_c = results[best_model_name]["EWs_ori"]
+EWs_corr_c = results[best_model_name]["EWs_corr"]
+print("No sigma clipping applied to EWs")
+#EWs_ori_c  = sigma_clip(results[best_model_name]["EWs_ori"])
+#EWs_corr_c = sigma_clip(results[best_model_name]["EWs_corr"])
+
+median_ori  = np.median(EWs_ori_c)
+sigma_ori   = np.std(EWs_ori_c)
+median_corr = np.median(EWs_corr_c)
+sigma_corr  = np.std(EWs_corr_c)
+
+plt.figure(figsize=(11, 6))
+plt.title(f"Spaxels EW measurements for the second best model ({best_model_name})")
+
+plt.hist(EWs_ori_c,  label="EW from original spectra",     alpha=0.5,color=colors[0])
+plt.axvline(x=median_ori, color=colors[0])
+plt.axvspan(median_ori - sigma_ori, median_ori + sigma_ori, alpha=0.15, color=colors[0])
+
+plt.hist(EWs_corr_c, label="EW from model w/out emission", alpha=0.5,color=colors[2])
+plt.axvline(x=median_corr, color=colors[2])
+plt.axvspan(median_corr - sigma_corr, median_corr + sigma_corr, alpha=0.15, color=colors[2])
+
+plt.legend(fontsize=13)
+plt.text(0.98, 0.15, f"Original:   Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
+         ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
+plt.text(0.98, 0.10, f"Corrected:  Median={median_corr:.2f} Å,  σ={sigma_corr:.2f} Å",
+         ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
+plt.xlabel("EW (Å)", fontsize=13)
+plt.ylabel("N bins", fontsize=13)
+plt.tight_layout()
+plt.savefig(os.path.join(data_dir_sn,f"EW_histogram_{best_model_name.replace(' ', '_')}.pdf"), bbox_inches='tight')
+
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+fig.suptitle(f"Spaxels EW measurements — {best_model_name}", fontsize=14)
+
+ax1.hist(EWs_ori_c, alpha=0.6, color=colors[1], label="EW from original spectra")
+ax1.axvline(x=median_ori, color=colors[1])
+ax1.axvspan(median_ori - sigma_ori, median_ori + sigma_ori, alpha=0.15, color=colors[1])
+ax1.text(0.98, 0.85, f"Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
+         ha='right', va='top', transform=ax1.transAxes, fontsize=13)
+ax1.legend(fontsize=13)
+ax1.set_ylabel("N bins", fontsize=13)
+
+ax2.hist(EWs_corr_c, alpha=0.6, color=colors[2], label="EW from model w/out emission")
+ax2.axvline(x=median_corr, color=colors[2])
+ax2.axvspan(median_corr - sigma_corr, median_corr + sigma_corr, alpha=0.15, color=colors[2])
+ax2.text(0.98, 0.85, f"Median={median_corr:.2f} Å,  σ={sigma_corr:.2f} Å",
+         ha='right', va='top', transform=ax2.transAxes, fontsize=13)
+ax2.legend(fontsize=13)
+ax2.set_ylabel("N bins", fontsize=13)
+ax2.set_xlabel("EW (Å)", fontsize=13)
+
+plt.tight_layout()
+plt.savefig(os.path.join(data_dir_sn,f"EW_histogram_{best_model_name.replace(' ', '_')}.pdf"), bbox_inches='tight')

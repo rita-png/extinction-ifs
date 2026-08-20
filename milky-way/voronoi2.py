@@ -188,9 +188,10 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
         else:
             bins_dir = os.path.join(results_dir, 'bins_spectra')
             os.makedirs(bins_dir, exist_ok=True)
-            a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
-        
-
+            if save_temp==True:
+                a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
+            else:
+                a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False)
         if not np.isnan(a[0]):
             EWs.append(a[0])
             EW_errs.append(b[0])
@@ -334,5 +335,4 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     plt.savefig(os.path.join(results_dir, 'Voronoi_bins.pdf'), bbox_inches='tight')
     plt.close()
 
-    return centroids, EWs, EW_errs
-    return centroids, EWs, EW_errs
+    return centroids, EWs, EW_errs, [all_bin_spectra, bin_map, binned_img, EWs_map_bins]
