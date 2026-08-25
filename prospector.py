@@ -6,9 +6,6 @@ param de resolucao do espetro deixar livre
 
 redshfit livre
 """
-// func to delete number from array
-def delete_number_from_array(array, number):
-    return [x for x in array if not (x == number)] 
 
 from functions import *
 

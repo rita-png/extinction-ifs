@@ -27,7 +27,11 @@ if args.force and args.resume:
     parser.error('Cannot use both --force and --resume')
 
 
-SN_name="SN2010ev"#"SN2007cq"#"ASASSN-14ad"#
+SN_name="SN2001el"
+
+
+#done "SN2019ehk" "SN2007cq" "SN2011jm"
+#"SN2010ev" need to confirm if this stays the same after removing halpha stars
 
 print("WARNING change the following to true if you want isophotes")
 isophotes=False
@@ -59,6 +63,15 @@ elif SN_name=="CSP14aaq":
 elif SN_name=="LSQ12ca":
     ra,dec=82.765114,	-19.801537
     z=0.098752
+elif SN_name=="SN2019ehk":
+    z=0.0043
+    ra,dec=185.733958, 15.826119
+elif SN_name=="SN2011jm":
+    z=0.00326
+    ra,dec=193.7129, 0.6541
+elif SN_name=="SN2001el":
+    z=0.003896
+    ra,dec=56.12738,-44.63992
 
 # Minimal: assume local DATA root ../../DATA
 DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'DATA'))
@@ -99,6 +112,16 @@ width=70
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
 region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
 
+## skipping this cube if its zero at Na
+idx_lo = findWavelengths(wave, na_rest - 10)[1]
+idx_hi = findWavelengths(wave, na_rest + 10)[1]
+na_region_spectrum = region[idx_lo:idx_hi, :, :]
+
+if np.all(np.isnan(na_region_spectrum)):
+    print("Spectrum around Na D is all zeros in this region: skipping this cube.")
+    sys.exit()
+
+###
 
 # import cube of uncertainties
 if (not args.force) and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
@@ -115,9 +138,7 @@ else:
 
 
 ##
-
-
-stacked_cube=np.nanmedian(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##i was doing sum
+"""stacked_cube=np.nanmedian(cube[int(len(wave)/4):int(3*len(wave)/4),:,:], axis=0)##i was doing sum
 #stacked_cube=np.nansum(cube[index-100:index+100, :, :], axis=0)
 #stacked_cube = stacked_cube.astype(np.float32)
 
@@ -133,33 +154,93 @@ mean, median, std = sigma_clipped_stats(image, sigma=3.0)
 
 # using DAOStarFinder to detect stars
 daofind = DAOStarFinder(fwhm=4.0, threshold=7*std)#5, 4
+sources = daofind(image - median)"""
+
+### new: only keeping sources that are not in halpha host emission
+
+from scipy.spatial import cKDTree
+
+# --- 1. Your existing continuum detection (unchanged) ---
+stacked_cube = np.nanmedian(cube[index-100:index+100, :, :], axis=0)
+image = stacked_cube
+mean, median, std = sigma_clipped_stats(image, sigma=3.0)
+daofind = DAOStarFinder(fwhm=4.0, threshold=7*std)
 sources = daofind(image - median)
+if sources is not None:
+    x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
+
+    # --- 2. Narrow-band Halpha image at the HOST's redshift ---
+    ha_rest = 6563
+    ha_obs = ha_rest * (1 + z)
+    ha_index = findWavelengths(wave, ha_obs)[1]
+
+    halfwidth = 10  # pixels, narrow -- just the line core
+    halpha_image = np.nansum(cube[ha_index-halfwidth:ha_index+halfwidth, :, :], axis=0)
+
+    mean_ha, median_ha, std_ha = sigma_clipped_stats(halpha_image, sigma=3.0)
+    daofind_ha = DAOStarFinder(fwhm=4.0, threshold=5*std_ha)
+    sources_ha = daofind_ha(halpha_image - median_ha)
+
+    # --- 3. Cross-match: keep continuum sources with NO nearby Halpha source ---
+    match_radius = 3.0
+
+    if sources_ha is not None and len(sources_ha) > 0:
+        ha_coords = np.transpose((sources_ha['x_centroid'], sources_ha['y_centroid']))
+        cont_coords = np.transpose((x_coords, y_coords))
+
+        tree = cKDTree(ha_coords)
+        dist, _ = tree.query(cont_coords, k=1)
+
+        is_mw_star = dist > match_radius
+    else:
+        is_mw_star = np.ones(len(sources), dtype=bool)
+
+    sources_filtered = sources[is_mw_star]
+    print(f"Kept {is_mw_star.sum()} / {len(sources)} sources after Halpha cross-match")
 
 
-# filter by compactness
-#sources = sources[sources['peak'] / sources['npix'] > 1]
 
-x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
-print("We have detected ", len(sources)," sources!")
+
+    sources=sources_filtered
+
+
+
+
+
+
+
+
+
+
+    x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
+    print("We have detected ", len(sources)," sources!")
+else:
+    x_coords, y_coords = np.array([]), np.array([])
+    print("No sources detected!")
+
 
 ##this is just needed for sn2010ev
 ny, nx = (image).shape
-x0, y0 = nx/2, ny/2
-d = np.hypot(x_coords - x0, y_coords - y0)
-#remove_idx = np.argmin(d)
-r_exclude = 10
+if SN_name=="SN2010ev":
+    
+    x0, y0 = nx/2, ny/2
+    d = np.hypot(x_coords - x0, y_coords - y0)
+    #remove_idx = np.argmin(d)
 
-#x_coords = np.delete(x_coords, remove_idx)
-#y_coords = np.delete(y_coords, remove_idx)
+    print("WARNING INSPECT THIS EXCLUSION")
+    r_exclude = 10
 
-keep = d > r_exclude
+    #x_coords = np.delete(x_coords, remove_idx)
+    #y_coords = np.delete(y_coords, remove_idx)
 
-x_coords = x_coords[keep]
-y_coords = y_coords[keep]
+    keep = d > r_exclude
+
+    x_coords = x_coords[keep]
+    y_coords = y_coords[keep]
 
 
 
-print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask has a total of ",np.sum(keep)," masked stars.")
+    print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask has a total of ",np.sum(keep)," masked stars.")
 
 ##
 
@@ -270,7 +351,8 @@ EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.p
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
-print("\nComputing sum spectra of all spaxels, excluding MW stars")
+#skipping this
+"""print("\nComputing sum spectra of all spaxels, excluding MW stars")
 
 if (not args.force) and os.path.exists(os.path.join(results_dir, 'whole_masked_cube_spec.npy')):
     spec = np.load(os.path.join(results_dir, 'whole_masked_cube_spec.npy'))
@@ -281,7 +363,7 @@ else:
     
 
 out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
-EW_all,ERR_all=out[0][0],out[1][0]
+EW_all,ERR_all=out[0][0],out[1][0]"""
 
 
 ##
@@ -427,7 +509,6 @@ masked_err_cube = np.where(mask, errcube, np.nan)
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 #spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
-
 out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 

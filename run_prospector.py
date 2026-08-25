@@ -1,4 +1,4 @@
-def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
+def run_prospector_spaxel(spectrum,unc,wave,outdir,z):
 
     
     import os
@@ -12,10 +12,7 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
     
     
 
-    #directory to write stuff
-    i, j = pixel
-    outdir = f"results/x{i}_y{j}"
-    os.makedirs(outdir, exist_ok=True)
+    
 
     import prospect
 
@@ -178,7 +175,7 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
     plt.plot(obs.wavelength, spec[0], label='model')
     plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
     plt.legend()
-    plt.savefig(os.path.join(outdir, "initial_guesses_for_optimize.png"), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(outdir, "initial_guesses_for_optimize.pdf"), dpi=150, bbox_inches='tight')
     #plt.show(block=True)
 
     #
@@ -220,7 +217,7 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
     plt.scatter(obs.wavelength[~obs.mask], obs.flux[~obs.mask], label='excluded',color='red',s=20)
     plt.plot(obs.wavelength, spec[0], label='best fit')
     plt.legend()
-    plt.savefig(os.path.join(outdir, "best_fit_optimize.png"), dpi=150)
+    plt.savefig(os.path.join(outdir, "best_fit_optimize.pdf"), dpi=150)
     #plt.show(block=True)
 
 
@@ -292,7 +289,7 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
     output = fit_model(observations, model, sps,noise=noise_model,emcee=True,optimize=False,**fitting_kwargs,verbose=True)
     if output is not None:
 
-        print("Returning data for pixel", pixel)
+        #print("Returning data for pixel", pixel)
         
         # PLOT SPECTRUM
         sampler = output["sampling"]
@@ -310,10 +307,10 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
         plt.ylabel("Flux")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(os.path.join(outdir, "median_spectrum.png"), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(outdir, "median_spectrum.pdf"), dpi=150, bbox_inches='tight')
         plt.close()
             
-        print("Median spectrum plotted and saved as median_spectrum.png")
+        print("Median spectrum plotted and saved as median_spectrum.pdf")
 
         # PLOT CORNER
         sampler = output["sampling"]
@@ -329,7 +326,7 @@ def run_prospector_spaxel(spectrum,unc,wave,pixel,z):
 
         cfig, caxes = plt.subplots(ndim, ndim, figsize=(10,9))
         caxes = corner.allcorner(flat_chain.T, theta_labels, caxes, color="royalblue", show_titles=True)
-        plt.savefig(os.path.join(outdir, "corner_emcee.png"), dpi=150)
+        plt.savefig(os.path.join(outdir, "corner_emcee.pdf"), dpi=150)
         return output
 
     else:

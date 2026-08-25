@@ -536,6 +536,33 @@ def circular_aperture_sum(cube, x_center, y_center, radius):
 
     return stacked_spectrum, pixels
 
+def circular_aperture_unc(ecube, x_center, y_center, radius):
+
+    r = int(np.ceil(radius))
+    uncertainties = []
+
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+
+            if dx**2 + dy**2 <= radius**2:
+
+                x = int(x_center + dx)
+                y = int(y_center + dy)
+
+                # Check bounds
+                if 0 <= x < ecube.shape[2] and 0 <= y < ecube.shape[1]:
+
+                    uncertainty = ecube[:, y, x]
+                    uncertainties.append(uncertainty)
+
+    if len(uncertainties) > 0:
+        aperture_unc = np.sqrt(
+            np.nansum(np.asarray(uncertainties)**2, axis=0)
+        )
+    else:
+        aperture_unc = np.full(ecube.shape[0], np.nan)
+
+    return aperture_unc
 ## binning ##
 
 def sum_submatrix(matrix,row_i,col_i,row_width,col_width): #row_i,col_i,number of rows, number of cols
@@ -1897,7 +1924,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         
         
         x_chopped,y_chopped=chop_data(wave,data,wavelength-100,wavelength+100)
-        
+        print("len of chopped data is ",len(x_chopped),len(y_chopped))
         x,y=x_chopped,y_chopped
         x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
 
@@ -1910,6 +1937,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         kernel_size=KS
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
+
         
         #print("NEW MAR2026 KS IS ",KS)
         interp=interp1d(x_cont, cont, kind='cubic')
@@ -1979,6 +2007,7 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         err_f=yerrMUSE
         #print(err_f)
 
+        
         g = interp1d(x, excess_intensity, kind='cubic')
 
         
@@ -2053,18 +2082,19 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
             plt.legend(fontsize=10)#20
 
+            if save:
             
+                            save = save.replace(".pdf", f"EW={area_over_continuum:.2f}.pdf")
+            
+                            print("## Saving image with name ", save)
+                            plt.savefig(save, bbox_inches='tight')
+
+                        
             if plots:
                 plt.show()
 
 
 
-            if save:
-
-                save = save.replace(".pdf", f"EW={area_over_continuum:.2f}.pdf")
-
-                print("## Saving image with name ", save)
-                plt.savefig(save, bbox_inches='tight')
             
             plt.close()
 
@@ -2144,6 +2174,16 @@ def EW_theoretical_spectra(wavelength,flux, na_rest,plots=False):
     return EW_array, EW_err_array
 
 
+def Na_EW_to_AV(EWs,EWs_e):
+    AVs=3.1*10**(np.multiply(1.17,EWs)-1.85)
+    
+    #error of Av
+    dAV_dEW = 3.1 * np.log(10) * 1.17 * 10**(np.multiply(1.17 ,EWs) - 1.85)
+    err_from_EW = dAV_dEW * EWs_e
+    
+    err_from_calib = AVs * np.log(10) * 0.08 #err from poznanski relation
+    AVs_err = np.sqrt(err_from_EW**2 + err_from_calib**2)
+    return AVs,AVs_err
 
 def generate_spectra(model,stars_data,figures=False):
 
