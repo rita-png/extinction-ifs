@@ -27,7 +27,9 @@ if args.force and args.resume:
     parser.error('Cannot use both --force and --resume')
 
 
-SN_name="SN2001el"
+SN_name="SN2011jm"#"SN2007cq"
+
+#"SN2010ev"
 
 
 #done "SN2019ehk" "SN2007cq" "SN2011jm"
@@ -818,7 +820,7 @@ normalization=True####False##########################################True
 voronoi=True
 
 #import data
-spec_voronoi_bins, bin_map, EWs_map_bins, binned_img = spectra_and_bins
+spec_voronoi_bins, bin_map, EWs_map_bins, binned_img, valid_bin_indices = spectra_and_bins
         
 
 
@@ -834,11 +836,9 @@ mask_wave     = (new_wave > na_rest - 18) & (new_wave < na_rest + 18)
 wave_fit = new_wave[mask_wave]
 continuum_bins = []
 
+# finding the continuum of each bin
 for i in range(len(spec_voronoi_bins)):
-    print("bin ",i)
-
-    # finding the continuum of each bin
-    print("\nFinding the continuum of each bin")
+    #print("bin ",i)
 
     x,y=new_wave,spec_voronoi_bins[i]
 
@@ -854,8 +854,6 @@ for i in range(len(spec_voronoi_bins)):
         
     continuum=interp(new_wave)
     continuum_bins.append(continuum)
-
-
 
     ## subtracting the continuum to the bin spectra
     flux     = spec_voronoi_bins[i] - continuum
@@ -908,7 +906,8 @@ x = len(spec_voronoi_bins)
 for model_name, (model_fn, _) in MODELS.items():
     model_params = results[model_name]["params"]
     model_fluxes = results[model_name]["models"]
-    EWs_corr, EWs_ori = [], []
+    EWs_corr = np.full(x, np.nan)
+    EWs_ori = np.full(x, np.nan)
     ncols = int(np.ceil(np.sqrt(x)))
     nrows = int(np.ceil(x / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(35, 25), sharex=True, sharey=True)
@@ -932,19 +931,25 @@ for model_name, (model_fn, _) in MODELS.items():
             emission_model   = gaussian(wave_fit, abs(A3), mu3, sigma3)
             absorption_model = mflux - emission_model
 
-        ax.plot(new_wave, data, color="black", linewidth=2, alpha=0.5, label="Data")
-        ax.plot(wave_fit, mflux, color="red", linewidth=2, linestyle="dashed", label="Model")
-        ax.plot(wave_fit, absorption_model, color="blue", linewidth=2,
-                linestyle="dashed", label="Model w/out emission")
+        label = bin_id == 0
+        ax.plot(new_wave, data, color="black", linewidth=2, alpha=0.5,
+            label="Data" if label else None)
+        ax.plot(wave_fit, mflux, color="red", linewidth=2, linestyle="dashed",
+            label="Model" if label else None)
+        if model_name == "B":
+            ax.plot(wave_fit, absorption_model, color="blue", linewidth=2,
+                linestyle="dashed",
+                label="Model w/out emission" if label else None)
         bic_val  = results[model_name]["bic"][bin_id]
         chi2_val = results[model_name]["chi2r"][bin_id]
-        ax.set_title(f"Bin {bin_id}  |  BIC={bic_val:.1f}  χ²ᵣ={chi2_val:.2f}", fontsize=14)
-        ax.legend(fontsize=12)
+        ax.set_title(f"Bin {bin_id} ", fontsize=14)### |  BIC={bic_val:.1f}  χ²ᵣ={chi2_val:.2f}", fontsize=14)
+        if label:
+            ax.legend(fontsize=12)
         ax.set_xlim(na_rest - 30, na_rest + 30)
         ax.set_ylim(np.min(data) * 1.05, np.max(data) * 1.05)
         ax.tick_params(axis="both", labelsize=14)
-        EWs_corr.append(-np.trapezoid(absorption_model / continuum, wave_fit))
-        EWs_ori.append(-np.trapezoid(data[mask_wave] / continuum, wave_fit))
+        EWs_corr[bin_id] = -np.trapezoid(absorption_model / continuum, wave_fit) #absorption_model if flux-continuum
+        EWs_ori[bin_id] = -np.trapezoid(data[mask_wave] / continuum, wave_fit) #data[mask_wave] is flux-continuum
 
     for ax in axes[x:]:
         ax.axis("off")
@@ -960,8 +965,24 @@ for model_name, (model_fn, _) in MODELS.items():
     results[model_name]["EWs_ori"]  = EWs_ori
 
 
-np.shape(EWs_ori)==np.shape(EWs_corr)
-np.shape(EWs_ori)
+# Select the best-fitting model independently for each Voronoi bin spectrum.
+
+best_model_by_bin = np.full(x, None, dtype=object)
+for bin_id in range(x):
+    bic_by_model = {
+        model_name: results[model_name]["bic"][bin_id]
+        for model_name in MODELS
+    }
+    valid_models = {
+        name: bic for name, bic in bic_by_model.items()
+        if np.isfinite(bic)
+    }
+    if valid_models:
+        best_model_by_bin[bin_id] = min(valid_models, key=valid_models.get)
+
+print("Best model by Voronoi bin:")
+for model_name in MODELS:
+    print(f"  Model {model_name}: {np.sum(best_model_by_bin == model_name)} bins")
 
 
 
@@ -979,7 +1000,7 @@ na2 = sp.Symbol('mu_{Na,2}')
 
 models_sym = {
     "A": G(A1, na1,  sM)    + G(A2, na2, sM),
-    "B": G(A1, na1,  sM)    + G(A2, na2, sM)                     + G(A3, 5893, sM)
+    "B": G(A1, na1,  sM)    + G(A2, na2, sM)    + G(A3, na_rest, sM)
 }
 
 # free parameters and fixed constraints per model
@@ -1003,20 +1024,10 @@ for name in MODELS:
         f"</p>"
     ))
 
-##### EW histogram for best model with 5-sigma clipping 
-best_model_name = min(
-    MODELS.keys(),
-    key=lambda name: (
-        #np.nanmedian(results[name]["bic"]),
-        np.nanmedian(results[name]["chi2r"])
-    )
-)
-print(f"Best model: {best_model_name}\n Do WE WANT TO FORCE IT TO BE MODEL B? If so, uncomment the line below.")
-
-#best_model_name='B'
+##### EW histogram using the best BIC model selected independently for each bin
 
 colors = [plt.cm.Set1(i) for i in [0, 1, 2]]
-colors = ['#E74C3C', '#3498DB', '#2ECC71']  # red, blue, green
+colors = ['#E74C3C', '#3498DB', "#57469A"]  # red, blue, green
 
 
 
@@ -1031,11 +1042,20 @@ def sigma_clip(arr, nsigma=2):
         print(f"  Clipped {n_clipped} outliers beyond {nsigma}σ")
     return arr[mask]
 
-EWs_ori_c = results[best_model_name]["EWs_ori"]
-EWs_corr_c = results[best_model_name]["EWs_corr"]
-print("No sigma clipping applied to EWs")
-#EWs_ori_c  = sigma_clip(results[best_model_name]["EWs_ori"])
-#EWs_corr_c = sigma_clip(results[best_model_name]["EWs_corr"])
+# pick the bins that have a valid best-fitting model
+selected_bins = [
+    bin_id for bin_id, model_name in enumerate(best_model_by_bin)
+    if model_name is not None
+]
+# EWs_ori_c and EWs_corr_c are the original and corrected EW, using the best-fitting model for each bin
+EWs_ori_c = np.array([
+    results[best_model_by_bin[bin_id]]["EWs_ori"][bin_id]
+    for bin_id in selected_bins
+])
+EWs_corr_c = np.array([
+    results[best_model_by_bin[bin_id]]["EWs_corr"][bin_id]
+    for bin_id in selected_bins
+])
 
 median_ori  = np.median(EWs_ori_c)
 sigma_ori   = np.std(EWs_ori_c)
@@ -1043,46 +1063,80 @@ median_corr = np.median(EWs_corr_c)
 sigma_corr  = np.std(EWs_corr_c)
 
 plt.figure(figsize=(11, 6))
-plt.title(f"Spaxels EW measurements for the second best model ({best_model_name})")
+plt.title("Spaxels EW measurements using the best model per bin")
 
 plt.hist(EWs_ori_c,  label="EW from original spectra",     alpha=0.5,color=colors[0])
 plt.axvline(x=median_ori, color=colors[0])
 plt.axvspan(median_ori - sigma_ori, median_ori + sigma_ori, alpha=0.15, color=colors[0])
 
-plt.hist(EWs_corr_c, label="EW from model w/out emission", alpha=0.5,color=colors[2])
+plt.hist(EWs_corr_c, label="EW from model w/out emission", alpha=0.5,color=colors[2])#aqui
 plt.axvline(x=median_corr, color=colors[2])
 plt.axvspan(median_corr - sigma_corr, median_corr + sigma_corr, alpha=0.15, color=colors[2])
 
 plt.legend(fontsize=13)
-plt.text(0.98, 0.15, f"Original:   Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
+plt.text(0.02, 0.96, f"Original:   Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
          ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
 plt.text(0.98, 0.10, f"Corrected:  Median={median_corr:.2f} Å,  σ={sigma_corr:.2f} Å",
          ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
 plt.xlabel("EW (Å)", fontsize=13)
 plt.ylabel("N bins", fontsize=13)
 plt.tight_layout()
-plt.savefig(os.path.join(data_dir_sn,f"EW_histogram_{best_model_name.replace(' ', '_')}.pdf"), bbox_inches='tight')
+plt.savefig(os.path.join(data_dir_sn,"EW_histogram_best_model_per_bin.pdf"), bbox_inches='tight')
 
+## PLOTTING FINAL PLOTS: EW vs distance to the center and EW vs BIC
+distance_indices = [
+    index for index in valid_bin_indices
+    if best_model_by_bin[index] is not None
+]
+distance_values = centroids_vor[
+    [valid_bin_indices.index(index) for index in distance_indices]
+]
+distance_positions = [valid_bin_indices.index(index) for index in distance_indices]
+distance_models = np.array([
+    best_model_by_bin[index] for index in distance_indices
+])
+distance_ews = np.array([results[best_model_by_bin[index]]["EWs_corr"][index]
+    for index in distance_indices
+])
+distance_ew_errs = np.asarray(EW_errs_vor)[distance_positions]
+distance_bics = np.array([
+    results[best_model_by_bin[index]]["bic"][index]
+    for index in distance_indices
+])
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
-fig.suptitle(f"Spaxels EW measurements — {best_model_name}", fontsize=14)
+weighted_distance_ew, weighted_distance_err = weighted_average(distance_ews, distance_ew_errs)
 
-ax1.hist(EWs_ori_c, alpha=0.6, color=colors[1], label="EW from original spectra")
-ax1.axvline(x=median_ori, color=colors[1])
-ax1.axvspan(median_ori - sigma_ori, median_ori + sigma_ori, alpha=0.15, color=colors[1])
-ax1.text(0.98, 0.85, f"Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
-         ha='right', va='top', transform=ax1.transAxes, fontsize=13)
-ax1.legend(fontsize=13)
-ax1.set_ylabel("N bins", fontsize=13)
+model_colors = {"A": colors[0], "B": colors[1]}
+fig, (ax_distance, ax_bic) = plt.subplots(2, 1, figsize=(11, 10), sharey=True)
+for model_name, model_color in model_colors.items():
+    model_mask = distance_models == model_name
+    ax_distance.errorbar(
+        distance_values[model_mask], distance_ews[model_mask],
+        yerr=distance_ew_errs[model_mask], fmt="o", color=model_color,
+        markeredgecolor="black", capsize=5, zorder=2,
+        label=f"Model {model_name}"
+    )
+    ax_bic.errorbar(
+        distance_bics[model_mask], distance_ews[model_mask],
+        yerr=distance_ew_errs[model_mask], fmt="o", color=model_color,
+        markeredgecolor="black", capsize=5, zorder=2,
+        label=f"Model {model_name}"
+    )
 
-ax2.hist(EWs_corr_c, alpha=0.6, color=colors[2], label="EW from model w/out emission")
-ax2.axvline(x=median_corr, color=colors[2])
-ax2.axvspan(median_corr - sigma_corr, median_corr + sigma_corr, alpha=0.15, color=colors[2])
-ax2.text(0.98, 0.85, f"Median={median_corr:.2f} Å,  σ={sigma_corr:.2f} Å",
-         ha='right', va='top', transform=ax2.transAxes, fontsize=13)
-ax2.legend(fontsize=13)
-ax2.set_ylabel("N bins", fontsize=13)
-ax2.set_xlabel("EW (Å)", fontsize=13)
-
-plt.tight_layout()
-plt.savefig(os.path.join(data_dir_sn,f"EW_histogram_{best_model_name.replace(' ', '_')}.pdf"), bbox_inches='tight')
+ax_distance.axhline(weighted_distance_ew, color=colors[2], linestyle="--",label="Weighted average")
+ax_distance.axhspan(weighted_distance_ew - weighted_distance_err,weighted_distance_ew + weighted_distance_err,color=colors[2], alpha=0.15)
+ax_bic.axhline(weighted_distance_ew, color=colors[2], linestyle="--",label="Weighted average")
+ax_bic.axhspan(weighted_distance_ew - weighted_distance_err,weighted_distance_ew + weighted_distance_err,color=colors[2], alpha=0.15)
+ax_distance.text(0.02, 0.05,f"Weighted average = {weighted_distance_ew:.2f} +/- {weighted_distance_err:.2f} Å",ha="left", va="bottom", transform=ax_distance.transAxes, fontsize=13)
+ax_distance.set_xlabel("Distance from image center (px)", fontsize=13)
+ax_distance.set_ylabel("Corrected EW (Å)", fontsize=13)
+ax_distance.set_title("Corrected EW versus distance from image center")
+ax_distance.legend(loc="upper right", fontsize=13)
+ax_bic.set_xlabel("BIC of selected fit", fontsize=13)
+ax_bic.set_ylabel("Corrected EW (Å)", fontsize=13)
+ax_bic.set_title("Corrected EW versus BIC")
+ax_bic.legend(loc="upper right", fontsize=13)
+fig.suptitle(f"{SN_name}: Corrected EW measurements", fontsize=16)
+fig.tight_layout(rect=[0, 0, 1, 0.96])
+fig.savefig(os.path.join(data_dir_sn, "EW_corr_vs_distance.pdf"), bbox_inches="tight")
+plt.close(fig)

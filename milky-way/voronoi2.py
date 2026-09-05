@@ -151,6 +151,7 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     EW_errs = []
     center_y = ny / 2
     center_x = nx / 2
+    valid_bin_indices = []
 
     all_bin_spectra = []
 
@@ -192,13 +193,14 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
                 a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
             else:
                 a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False)
-        if not np.isnan(a[0]):
-            EWs.append(a[0])
-            EW_errs.append(b[0])
-            centroids.append(dist)
-        else:
-            print("Detected emission in wavelength of the absorption line!")
 
+        
+        EWs.append(a[0])
+        EW_errs.append(b[0])
+        centroids.append(dist)
+        valid_bin_indices.append(len(all_bin_spectra) - 1)
+
+        
         EWs_map_bins[mask] = a
 
     all_bin_spectra = np.array(all_bin_spectra)
@@ -218,22 +220,8 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     print("Excluded ", k, " bins for including fluxes of the MW stars")
 
     
-    SNRs=np.divide(EWs,EW_errs)
+    SNRs=np.abs(np.divide(EWs,EW_errs))
     
-
-
-    # excluding bins with SNR<0
-    """temp=len(EWs)
-    good = (SNRs > 0)
-    
-    EWs = EWs[good]
-    EW_errs = EW_errs[good]
-    SNRs = SNRs[good]
-    centroids = centroids[good]
-
-    if temp!=len(EWs):
-        print("Excluded ",  temp-len(EWs)," bins for having SNR<0")"""
-
     y = np.array(EWs)
     sigma = np.array(EW_errs)
     w = 1 / sigma**2
@@ -335,4 +323,4 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     plt.savefig(os.path.join(results_dir, 'Voronoi_bins.pdf'), bbox_inches='tight')
     plt.close()
 
-    return centroids, EWs, EW_errs, [all_bin_spectra, bin_map, binned_img, EWs_map_bins]
+    return centroids, EWs, EW_errs, [all_bin_spectra, bin_map, binned_img, EWs_map_bins, valid_bin_indices]

@@ -1924,7 +1924,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         
         
         x_chopped,y_chopped=chop_data(wave,data,wavelength-100,wavelength+100)
-        print("len of chopped data is ",len(x_chopped),len(y_chopped))
         x,y=x_chopped,y_chopped
         x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
 
@@ -2184,6 +2183,19 @@ def Na_EW_to_AV(EWs,EWs_e):
     err_from_calib = AVs * np.log(10) * 0.08 #err from poznanski relation
     AVs_err = np.sqrt(err_from_EW**2 + err_from_calib**2)
     return AVs,AVs_err
+
+def AV_to_Na_EW(AVs, AVs_e):
+    
+    AVs = np.asarray(AVs, dtype=float)
+    AVs_e = np.asarray(AVs_e, dtype=float)
+
+    EWs = (np.log10(AVs / 3.1) + 1.85) / 1.17
+
+    # Propagate uncertainty from Av
+    dEW_dAV = 1 / (1.17 * np.log(10) * AVs)
+    EWs_err = dEW_dAV * AVs_e
+
+    return EWs, EWs_err
 
 def generate_spectra(model,stars_data,figures=False):
 
