@@ -51,7 +51,6 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     snr = signal / noise
     snr_total = np.sqrt(np.sum((signal / noise)**2))
 
-    print("WARNING REMOCE THE FOLLOWIGN LINES")# change to target_sn = snr_total/np.sqrt(150)
     target_sn = snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
     print("The target SNR is ", target_sn)
 
@@ -151,8 +150,6 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     EW_errs = []
     center_y = ny / 2
     center_x = nx / 2
-    valid_bin_indices = []
-
     all_bin_spectra = []
 
     k = 0
@@ -198,8 +195,6 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
         EWs.append(a[0])
         EW_errs.append(b[0])
         centroids.append(dist)
-        valid_bin_indices.append(len(all_bin_spectra) - 1)
-
         
         EWs_map_bins[mask] = a
 
@@ -215,7 +210,19 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     EWs = np.asarray(EWs)
     EW_errs = np.asarray(EW_errs)
     centroids = np.array(centroids)
-    EWs, EW_errs = EWs[~np.isnan(EWs)], EW_errs[~np.isnan(EW_errs)]
+    bin_count = len(all_bin_spectra)
+
+    # checking if any EWs are NaN or if the arrays are misaligned
+    if not (len(EWs) == len(EW_errs) == len(centroids) == bin_count):
+        raise RuntimeError("Voronoi EW, uncertainty, centroid, and spectrum arrays are misaligned")
+
+    valid_ew_mask = (np.isfinite(EWs) & np.isfinite(EW_errs) & (EW_errs > 0) & np.isfinite(centroids))
+    
+    EWs = EWs[valid_ew_mask]
+    EW_errs = EW_errs[valid_ew_mask]
+    centroids = centroids[valid_ew_mask]
+    if not np.any(valid_ew_mask):
+        raise RuntimeError("No Voronoi bins have finite EW measurements and uncertainties")
 
     print("Excluded ", k, " bins for including fluxes of the MW stars")
 
@@ -277,7 +284,7 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
 
 
 
-    plt.savefig(os.path.join(results_dir, 'Voronoi_bins_EWs.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir, 'EW_non_parametric.pdf'), bbox_inches='tight')
     plt.show()
 
 
@@ -323,4 +330,4 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
     plt.savefig(os.path.join(results_dir, 'Voronoi_bins.pdf'), bbox_inches='tight')
     plt.close()
 
-    return centroids, EWs, EW_errs, [all_bin_spectra, bin_map, binned_img, EWs_map_bins, valid_bin_indices]
+    return centroids, EWs, EW_errs, [all_bin_spectra, bin_map, binned_img, EWs_map_bins]

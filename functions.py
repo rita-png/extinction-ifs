@@ -1087,6 +1087,16 @@ def continuum_old(x,y,mode="both"):
     err_cont = lambda x: polynomial_error(x-k, params, covariance)
     return fit, x_continuum+k, y_continuum, err_cont
 
+def sigma_clip(arr, nsigma=2):
+    arr  = np.array(arr)
+    med  = np.median(arr)
+    std  = np.std(arr)
+    mask = np.abs(arr - med) < nsigma * std
+    n_clipped = np.sum(~mask)
+    if n_clipped:
+        print(f"  Clipped {n_clipped} outliers beyond {nsigma}σ")
+    return arr[mask]
+
 def continuum_line(x,y,mode="both"):
 
     ## selecting points for continuum
@@ -1928,21 +1938,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
 
         # continuum
-
-        delta_x = np.average(np.diff(x_cont))  # spacing in Å between x points
-        """kernel_width_angstroms = nodesep / 2
-        kernel_size = int(kernel_width_angstroms / delta_x)"""
-
         kernel_size=KS
         kernel = cosine_kernel(kernel_size)
         cont = convolve1d(y_cont, kernel, mode='nearest')
 
-        
-        #print("NEW MAR2026 KS IS ",KS)
         interp=interp1d(x_cont, cont, kind='cubic')
 
 
-        nodesep = kernel_size * delta_x  # in Angstroms
 
         # estimating flux errors like in Santiago's paper
         if spectra_err_per_bin is None:
@@ -1952,16 +1954,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             print("Warning: using inputted errcube for spectra error")
             yerrMUSE=spectra_err_per_bin
 
-
-        """nodes = np.linspace(np.min(x_cont), np.max(x_cont), N+1)
-        fluxnodes = interp(nodes)"""
-
-
-        # new continuum estimate
-        
-        #nodesep=(np.max(x_cont)-np.min(x_cont))/N # in Angstroms
-
-        #interp,nodes,fluxnodes=continuum(N,x_cont,y_cont,wavelength)
         
 
         #################
@@ -1985,9 +1977,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
         cont2 = convolve1d(y_cont, cosine_kernel(int(kernel_size*0.75)), mode='nearest')
         auxcont2=interp1d(x_cont, cont2, kind='cubic')
-
-        """auxcont1=continuum(int(N*1.25),x_cont,y_cont,wavelength)[0]
-        auxcont2=continuum(int(N*0.75),x_cont,y_cont,wavelength)[0]"""
 
 
 
@@ -2036,9 +2025,6 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
 
         ####
-
-        
-
         if plots or save:
             
             plt.figure(figsize=(6, 4))#10,8  

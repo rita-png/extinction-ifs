@@ -27,9 +27,9 @@ if args.force and args.resume:
     parser.error('Cannot use both --force and --resume')
 
 
-SN_name="SN2011jm"#"SN2007cq"
+SN_name="SN2010ev"#SN2001el"#"SN2010ev"#"SN2007cq"#"SN2011jm"
 
-#"SN2010ev"
+#
 
 
 #done "SN2019ehk" "SN2007cq" "SN2011jm"
@@ -820,9 +820,10 @@ normalization=True####False##########################################True
 voronoi=True
 
 #import data
-spec_voronoi_bins, bin_map, EWs_map_bins, binned_img, valid_bin_indices = spectra_and_bins
+#spec_voronoi_bins, bin_map, EWs_map_bins, binned_img, valid_bin_indices = spectra_and_bins
         
-
+spec_voronoi_bins, bin_map, EWs_map_bins, binned_img = spectra_and_bins
+ 
 
 MODELS = {
     # Re-map to only run two models: A -> original H, B -> original J
@@ -830,7 +831,7 @@ MODELS = {
     "B": (modelJ, [-200, -150, 10]),  # was J
 }
 
-results = {name: {"bic": [], "chi2r": [], "params": [], "models": []} for name in MODELS}
+results = {name: {"bic": [], "chi2r": [], "params": [], "models": [], "pcov": []} for name in MODELS}
 
 mask_wave     = (new_wave > na_rest - 18) & (new_wave < na_rest + 18)
 wave_fit = new_wave[mask_wave]
@@ -864,7 +865,7 @@ for i in range(len(spec_voronoi_bins)):
         #n+=1
         #print("N", n)
         try:
-            popt, _ = curve_fit(
+            popt, pcov = curve_fit(
                 model_fn, wave_fit, flux_fit,
                 p0=p0,
                 #bounds=MODEL_BOUNDS[name],
@@ -875,11 +876,13 @@ for i in range(len(spec_voronoi_bins)):
             results[name]["chi2r"].append(compute_reduced_chi2(flux_fit, mflux, len(popt)))
             results[name]["params"].append(popt)
             results[name]["models"].append(mflux)
+            results[name]["pcov"].append(pcov)
         except RuntimeError:
             results[name]["bic"].append(np.nan)
             results[name]["chi2r"].append(np.nan)
             results[name]["params"].append(None)
             results[name]["models"].append(None)
+            results[name]["pcov"].append(None)
 
 rows = []
 for name in MODELS:
@@ -899,10 +902,7 @@ table = Table(rows=rows,
               names=["Model", "N_params", "BIC (median ± MAD)", "χ²ᵣ (median ± MAD)", "N_failed"])
 table.pprint(max_width=-1)
 
-
 x = len(spec_voronoi_bins)
-
-
 for model_name, (model_fn, _) in MODELS.items():
     model_params = results[model_name]["params"]
     model_fluxes = results[model_name]["models"]
@@ -950,6 +950,19 @@ for model_name, (model_fn, _) in MODELS.items():
         ax.tick_params(axis="both", labelsize=14)
         EWs_corr[bin_id] = -np.trapezoid(absorption_model / continuum, wave_fit) #absorption_model if flux-continuum
         EWs_ori[bin_id] = -np.trapezoid(data[mask_wave] / continuum, wave_fit) #data[mask_wave] is flux-continuum
+        if model_name in ("A", "B"):
+            A1, A2 = popt[0], popt[1]
+            C = np.median(continuum)
+            EW_analytic = -(np.sqrt(2 * np.pi) * SIGMA_FIXED * (A1 + A2) / C)
+            pcov = results[model_name]["pcov"][bin_id]
+            EW_corr_err = (
+                np.sqrt(2 * np.pi) * SIGMA_FIXED / C
+                * np.sqrt(pcov[0, 0] + pcov[1, 1] + 2 * pcov[0, 1])
+            )
+            print(
+                f"Model {model_name}, bin {bin_id}: Numerical EW = {EWs_corr[bin_id]:.3f}, "
+                f"Analytical EW = {EW_analytic:.3f} +/- {EW_corr_err:.3f}"
+            )
 
     for ax in axes[x:]:
         ax.axis("off")
@@ -958,11 +971,12 @@ for model_name, (model_fn, _) in MODELS.items():
     fig.supxlabel("Wavelength", fontsize=20)
     fig.supylabel("Flux", fontsize=20)
     plt.tight_layout()
-    plt.savefig(os.path.join(data_dir_sn,f"BIN_fits_{safe_name}.pdf"), bbox_inches='tight')
+    plt.savefig(os.path.join(results_dir,f"BIN_fits_{safe_name}.pdf"), bbox_inches='tight')
     plt.show()
     print(f"Saved: BIN_fits_{safe_name}.pdf")
     results[model_name]["EWs_corr"] = EWs_corr
     results[model_name]["EWs_ori"]  = EWs_ori
+    results[model_name]["EW_corr_err"] = EW_corr_err
 
 
 # Select the best-fitting model independently for each Voronoi bin spectrum.
@@ -986,6 +1000,7 @@ for model_name in MODELS:
 
 
 
+##### defining the symbolic expressions for the models in LaTeX format, for display purposes
 x_s, A1, A2, A3 = sp.symbols('x A_1 A_2 A_3')
 mu1, mu2, mu3 = sp.symbols('mu_1 mu_2 mu_3')
 sigma1, sigma2, sigma3 = sp.symbols('sigma_1 sigma_2 sigma_3')
@@ -997,13 +1012,10 @@ def G(A, mu, sigma):
 
 na1 = sp.Symbol('mu_{Na,1}')
 na2 = sp.Symbol('mu_{Na,2}')
-
 models_sym = {
     "A": G(A1, na1,  sM)    + G(A2, na2, sM),
     "B": G(A1, na1,  sM)    + G(A2, na2, sM)    + G(A3, na_rest, sM)
 }
-
-# free parameters and fixed constraints per model
 param_notes = {
     
     "A": ("$A_1, A_2$",
@@ -1029,24 +1041,8 @@ for name in MODELS:
 colors = [plt.cm.Set1(i) for i in [0, 1, 2]]
 colors = ['#E74C3C', '#3498DB', "#57469A"]  # red, blue, green
 
-
-
-
-def sigma_clip(arr, nsigma=2):
-    arr  = np.array(arr)
-    med  = np.median(arr)
-    std  = np.std(arr)
-    mask = np.abs(arr - med) < nsigma * std
-    n_clipped = np.sum(~mask)
-    if n_clipped:
-        print(f"  Clipped {n_clipped} outliers beyond {nsigma}σ")
-    return arr[mask]
-
 # pick the bins that have a valid best-fitting model
-selected_bins = [
-    bin_id for bin_id, model_name in enumerate(best_model_by_bin)
-    if model_name is not None
-]
+selected_bins = [bin_id for bin_id, model_name in enumerate(best_model_by_bin)]
 # EWs_ori_c and EWs_corr_c are the original and corrected EW, using the best-fitting model for each bin
 EWs_ori_c = np.array([
     results[best_model_by_bin[bin_id]]["EWs_ori"][bin_id]
@@ -1057,6 +1053,45 @@ EWs_corr_c = np.array([
     for bin_id in selected_bins
 ])
 
+EWs_corr_errs_c = np.array([
+    results[best_model_by_bin[bin_id]]["EW_corr_err"][bin_id]
+    for bin_id in selected_bins
+])
+
+quit()
+#continue here
+"""
+if element=="Potassium":
+    central_wavelength=7665
+    velocity_window=400
+    kernel_size=90
+
+elif element=="Halpha":
+    central_wavelength=6562.8
+    
+elif element=="DIB5780":
+    central_wavelength=6613.6
+
+elif element=="DIB8620":
+    central_wavelength=8620
+    kernel_size=30
+    velocity_window=170
+    
+elif element=="Calcium":
+    central_wavelength=3933.7
+    
+elif element=="Sodium":
+    central_wavelength=5893.0
+    velocity_window=600
+    kernel_size=90
+
+elif element=="DIB5797":
+    central_wavelength=5797
+    kernel_size=20
+    velocity_window=170
+
+
+    """
 median_ori  = np.median(EWs_ori_c)
 sigma_ori   = np.std(EWs_ori_c)
 median_corr = np.median(EWs_corr_c)
@@ -1081,30 +1116,27 @@ plt.text(0.98, 0.10, f"Corrected:  Median={median_corr:.2f} Å,  σ={sigma_corr:
 plt.xlabel("EW (Å)", fontsize=13)
 plt.ylabel("N bins", fontsize=13)
 plt.tight_layout()
-plt.savefig(os.path.join(data_dir_sn,"EW_histogram_best_model_per_bin.pdf"), bbox_inches='tight')
+plt.savefig(os.path.join(data_dir_sn,"EW_fits_histogram.pdf"), bbox_inches='tight')
 
 ## PLOTTING FINAL PLOTS: EW vs distance to the center and EW vs BIC
-distance_indices = [
-    index for index in valid_bin_indices
-    if best_model_by_bin[index] is not None
-]
-distance_values = centroids_vor[
-    [valid_bin_indices.index(index) for index in distance_indices]
-]
-distance_positions = [valid_bin_indices.index(index) for index in distance_indices]
-distance_models = np.array([
-    best_model_by_bin[index] for index in distance_indices
+distance_indices = np.asarray(selected_bins, dtype=int)
+distance_values = centroids_vor[distance_indices]
+distance_models = best_model_by_bin[distance_indices]
+distance_ews = np.array([
+    results[best_model_by_bin[bin_id]]["EWs_corr"][bin_id]
+    for bin_id in distance_indices
 ])
-distance_ews = np.array([results[best_model_by_bin[index]]["EWs_corr"][index]
-    for index in distance_indices
+distance_ew_errs = np.array([
+    results[best_model_by_bin[bin_id]]["EW_corr_err"][bin_id]
+    for bin_id in distance_indices
 ])
-distance_ew_errs = np.asarray(EW_errs_vor)[distance_positions]
 distance_bics = np.array([
-    results[best_model_by_bin[index]]["bic"][index]
-    for index in distance_indices
+    results[best_model_by_bin[bin_id]]["bic"][bin_id]
+    for bin_id in distance_indices
 ])
 
-weighted_distance_ew, weighted_distance_err = weighted_average(distance_ews, distance_ew_errs)
+weighted_distance_ew, weighted_distance_err = weighted_average(EWs_corr_c, EWs_corr_errs_c)
+
 
 model_colors = {"A": colors[0], "B": colors[1]}
 fig, (ax_distance, ax_bic) = plt.subplots(2, 1, figsize=(11, 10), sharey=True)
@@ -1136,7 +1168,20 @@ ax_bic.set_xlabel("BIC of selected fit", fontsize=13)
 ax_bic.set_ylabel("Corrected EW (Å)", fontsize=13)
 ax_bic.set_title("Corrected EW versus BIC")
 ax_bic.legend(loc="upper right", fontsize=13)
-fig.suptitle(f"{SN_name}: Corrected EW measurements", fontsize=16)
+fig.suptitle(f"{SN_name}: Fits EW measurements", fontsize=16)
 fig.tight_layout(rect=[0, 0, 1, 0.96])
-fig.savefig(os.path.join(data_dir_sn, "EW_corr_vs_distance.pdf"), bbox_inches="tight")
+fig.savefig(os.path.join(data_dir_sn, "EW_fits_clipped.pdf"), bbox_inches="tight")
 plt.close(fig)
+
+
+"""
+# write all results of a txt file
+// write to a txt file a column wiht SN_name, the final weighted EW value, error, also the git version and the date
+import subprocess
+
+# Get the current Git commit
+git_version = subprocess.check_output(
+    ["git", "rev-parse", "--short", "HEAD"],
+    text=True
+).strip()
+"""
