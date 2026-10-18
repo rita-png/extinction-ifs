@@ -187,9 +187,9 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
             bins_dir = os.path.join(results_dir, 'bins_spectra')
             os.makedirs(bins_dir, exist_ok=True)
             if save_temp==True:
-                a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
+                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
             else:
-                a,b,foo=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False)
+                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False)
 
         
         EWs.append(a[0])
