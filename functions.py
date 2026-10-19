@@ -121,10 +121,10 @@ def best_continuum(wave, spec, wavelength,vel, kernel_widths_A=np.arange(20, 200
     v_sep = 3e5 * np.asarray(kernel_widths_A) / wavelength   # kernel width in km/s
     
     for w in kernel_widths_A:
-        print("Kernel width (A): ", w, "Velocity separation (km/s): ", 3e5 * w / wavelength)
+        #print("Kernel width (A): ", w, "Velocity separation (km/s): ", 3e5 * w / wavelength)
         out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vel,kernel_width_A=w,plots=True)
     
-        EWs.append(out[0][0]); EWs_err.append(out[1][0]); SNR_lines.append(out[0][0]/out[1][0])
+        EWs.append(out[0][0]); EWs_err.append(out[1][0]); SNR_lines.append(np.abs(out[0][0]/out[1][0]))
     
         
 
@@ -152,13 +152,12 @@ def best_continuum(wave, spec, wavelength,vel, kernel_widths_A=np.arange(20, 200
 
         
         print("## Saving image with name ", save)
-        #plt.savefig(save, bbox_inches='tight')
-        print("NOT SAVING IMAGE")
+        plt.savefig(save, bbox_inches='tight')
         plt.show()
         plt.close()
 
 
-    print("best continuum kernel size is ", kernel_widths_A[np.argmax(SNR_lines)], "with velocity separation (km/s): ", v_sep[np.argmax(SNR_lines)])
+    print("The best continuum kernel size is ", kernel_widths_A[np.argmax(SNR_lines)], "with velocity separation (km/s): ", v_sep[np.argmax(SNR_lines)])
 
 
     return kernel_widths_A[np.argmax(SNR_lines)]
@@ -199,7 +198,7 @@ def get_kernel_size(delta_vel, lambda_center, continuum_bound_w_min, continuum_b
 
 
 
-def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
+def best_integration_window(wave, spec, wavelength,best_kernel,plots=False,save=""):
 
     vels=np.arange(200,800,10)
 
@@ -208,9 +207,9 @@ def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
     EWs_err=[]
     
     for vv in vels:
-        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vv,KS=best_KS,plots=False)
+        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vv, kernel_width_A=best_kernel, plots=False)
 
-        SNR_lines.append(out[0][0]/out[1][0])
+        SNR_lines.append(np.abs(out[0][0]/out[1][0]))
         EWs.append(out[0][0])
         EWs_err.append(out[1][0])
         
@@ -238,11 +237,12 @@ def best_integration_window(wave, spec, wavelength,best_KS,plots=False,save=""):
 
         
         print("## Saving image with name ", save)
+        #plt.show()
         plt.savefig(save, bbox_inches='tight')
         plt.close()
 
 
-    print("best integration window is ", vels[np.argmax(SNR_lines)])
+    print("The best integration window is ", vels[np.argmax(SNR_lines)], " km/s.")
 
 
     return vels[np.argmax(SNR_lines)]
@@ -1983,29 +1983,9 @@ def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=1.5, n_iter=3):
 
     return cont, good
 
-"""
-def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=2, n_iter=3, det_A=5):
-    dx = np.median(np.diff(x))
-    odd = lambda A: 2 * int(round(A / dx / 2)) + 1
-    k     = cosine_kernel(odd(width_A))        # final continuum
-    k_ref = cosine_kernel(odd(2 * width_A))    # wide reference, ignores lines
-    k_det = cosine_kernel(odd(det_A))          # light smoothing to beat noise
 
-    window = (x >= lo - margin) & (x <= hi + margin)   # line being measured
-    good = ~window
-
-    for _ in range(n_iter):
-        yfill = np.interp(x, x[good], y[good])
-        r = convolve1d(y, k_det, mode='nearest') - convolve1d(yfill, k_ref, mode='nearest')
-        sigma = 1.4826 * np.median(np.abs(r[good] - np.median(r[good])))
-        good = ~window & (np.abs(r) < nsigma * sigma)
-
-    yfill = np.interp(x, x[good], y[good])
-    cont = convolve1d(yfill, k, mode='nearest')
-    return cont, good
-"""
 #kernel_widt=96.5
-def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,plots=True,kernel_width_A=25,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
+def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,plots=True,kernel_width_A=130,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
 
@@ -2017,28 +1997,29 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         # defining integration window
         bound1=wavelength*(1-v/(3*10**5))
         bound2=wavelength*(1+v/(3*10**5))
-        
-        x_chopped,y_chopped=chop_data(wave,data,wavelength-100,wavelength+100)
-        x,y=x_chopped,y_chopped
-        
+
+        x_chopped, y_chopped = chop_data(wave, data, wavelength-100, wavelength+100)
+        ok = np.isfinite(x_chopped) & np.isfinite(y_chopped) #dropping NaN values
+        x_all, y_all = x_chopped[ok], y_chopped[ok]
+
+        if len(x_all) < 10:
+            print("Skipping: only", len(x_all), "valid pixels in window")
+            EW_array.append(np.nan); EW_err_array.append(np.nan)
+            continue
+
         # continuum
-        #kernel_size=KS
-        #kernel = cosine_kernel(kernel_size)
-        """x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
+        """kernel_size=KS
+        kernel = cosine_kernel(kernel_size)
+        x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
         dx = np.median(np.diff(x_chopped))
         kernel = cosine_kernel(int(round(kernel_width_A / dx)))   # kernel covering width_A Angstrom
         cont = convolve1d(y_cont, kernel, mode='nearest')
         interp=interp1d(x_cont, cont, kind='cubic')"""
 
-        # new oct 2026
-        """cont_full, w = fit_continuum(x_chopped, y_chopped, kernel_width_A)
-        interp = interp1d(x_chopped, cont_full, kind='cubic')
-        x_cont, y_cont = x_chopped[w > 0], y_chopped[w > 0]"""
-
         #new oct 2026
-        cont_full, good = fit_continuum(x_chopped, y_chopped, bound1, bound2, kernel_width_A)
-        interp = interp1d(x_chopped, cont_full, kind='cubic')
-        x_cont, y_cont = x_chopped[good], y_chopped[good]
+        cont_all, good = fit_continuum(x_all, y_all, bound1, bound2, kernel_width_A)
+        interp = interp1d(x_all, cont_all, kind='cubic')
+        x_cont, y_cont = x_all[good], y_all[good]
         
 
 
@@ -2048,7 +2029,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             yerrMUSE = estimate_spec_err(x_cont, y_cont, interp)
         else:
             print("Warning: using inputted errcube for spectra error")
-            yerrMUSE=spectra_err_per_bin
+            _, err_chopped = chop_data(wave, spectra_err_per_bin[i], wavelength-100, wavelength+100)
+            yerrMUSE = err_chopped[ok]
 
         
 
@@ -2057,13 +2039,13 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         
 
 
-        x,y=chop_data(x,y,bound1,bound2)
-
+        x_win, y_win = chop_data(x_all, y_all, bound1, bound2)
+        cont = interp(x_win)
         
         
-        if len(x)==0:
+        if len(x_all)==0:
             print("Warning!! no points to interpolate")
-        cont = interp(x)
+        
 
 
         # estimating continuum error
@@ -2073,44 +2055,47 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         cont2 = convolve1d(y_cont, cosine_kernel(int(round(kernel_width_A / dx)*0.75)), mode='nearest')
         auxcont2=interp1d(x_cont, cont2, kind='cubic')"""
 
-        cont1, _ = fit_continuum(x_chopped, y_chopped, bound1, bound2, kernel_width_A*1.25)
-        cont2, _ = fit_continuum(x_chopped, y_chopped, bound1, bound2, kernel_width_A*0.75)
-        auxcont1 = interp1d(x_chopped, cont1, kind='cubic')
-        auxcont2 = interp1d(x_chopped, cont2, kind='cubic')
+        cont1, _ = fit_continuum(x_all, y_all, bound1, bound2, kernel_width_A*1.25)
+        cont2, _ = fit_continuum(x_all, y_all, bound1, bound2, kernel_width_A*0.75)
+        auxcont1 = interp1d(x_all, cont1, kind='cubic')
+        auxcont2 = interp1d(x_all, cont2, kind='cubic')
 
 
 
-        err_cont=[]
-        for j in range(len(x)):
-            c_avg = (cont[j]+auxcont1(x[j])+auxcont2(x[j]))/3
-            std_dev=np.sqrt((cont[j]-c_avg)**2+(auxcont1(x[j])-c_avg)**2+(auxcont2(x[j])-c_avg)**2)
-            err_cont.append(std_dev)
+        """err_cont=[]
+        for j in range(len(x_win)):
+            c_avg = (cont[j]+auxcont1(x_win[j])+auxcont2(x_win[j]))/3
+            std_dev=np.sqrt((cont[j]-c_avg)**2+(auxcont1(x_win[j])-c_avg)**2+(auxcont2(x_win[j])-c_avg)**2)
+            err_cont.append(std_dev)"""
 
-        ##
+        #same but vectorized
+        a1, a2 = auxcont1(x_win), auxcont2(x_win)
+        c_avg = (cont + a1 + a2) / 3
+        err_cont = np.sqrt((cont-c_avg)**2 + (a1-c_avg)**2 + (a2-c_avg)**2)
 
 
         # Compute the excess intensity above the continuum
-        excess_intensity = (cont-y)/cont
+        excess_intensity = (cont-y_win)/cont
         
         err_f=yerrMUSE
         #print(err_f)
 
         
-        g = interp1d(x, excess_intensity, kind='cubic')
+        g = interp1d(x_win, excess_intensity, kind='cubic')
 
         
 
         # Integrate the excess intensity (area over the continuum)
-        area_over_continuum = trapezoid(excess_intensity, x)
+        area_over_continuum = trapezoid(excess_intensity, x_win)
         
 
         #### estimating window error
-        x2,y2=chop_data(x_chopped,y_chopped,bound1-0.125*(bound2-bound1),bound2+0.125*(bound2-bound1))
+        x2,y2=chop_data(x_all,y_all,bound1-0.125*(bound2-bound1),bound2+0.125*(bound2-bound1))
         cont2 = interp(x2)
         excess_intensity2 = (cont2-y2)/cont2
         area_over_continuum2 = trapezoid(excess_intensity2, x2)
 
-        x3,y3=chop_data(x_chopped,y_chopped,bound1+0.125*(bound2-bound1),bound2-0.125*(bound2-bound1))
+        x3,y3=chop_data(x_all,y_all,bound1+0.125*(bound2-bound1),bound2-0.125*(bound2-bound1))
         cont3 = interp(x3)
         excess_intensity3 = (cont3-y3)/cont3
         area_over_continuum3 = trapezoid(excess_intensity3, x3)
@@ -2121,37 +2106,37 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
         else:
             bootstrap=True
 
-        err=error_non_parametric(x[2]-x[1],interp(x),err_cont,g(x),err_f,bootstrap)        
+        err=error_non_parametric(x_win[2]-x_win[1],interp(x_win),err_cont,g(x_win),err_f,bootstrap)        
         err=np.sqrt(err**2+(area_over_continuum-area_over_continuum2)**2+(area_over_continuum-area_over_continuum3)**2)
 
         ####
         if plots or save:
             
             plt.figure(figsize=(6, 4))#10,8  
-            plt.fill_between(x_chopped,y_chopped - yerrMUSE,y_chopped + yerrMUSE,color='blue',alpha=0.15)
+            plt.fill_between(x_all,y_all- yerrMUSE,y_all + yerrMUSE,color='blue',alpha=0.15)
             if len(titles)!=0:
                 plt.title("Aperture of "+str(titles[i])+" pixels")
             
 
 
-            plt.plot(x_chopped,y_chopped, label="Flux",color="gray")
+            plt.plot(x_all,y_all, label="Flux",color="gray")
 
             plt.ylabel("Flux", fontsize=15)#30
             plt.xlabel(r"Rest wavelength  ($\AA$)", fontsize=15)#30)
 
             
             #plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
-            plt.plot(x_chopped, cont_full, label="Continuum", color="Orange")
+            plt.plot(x_all, cont_all, label="Continuum", color="Orange")
             plt.plot(x_cont, y_cont, '.', color='blue', ms=2)
-            plt.plot(x_chopped[~good], y_chopped[~good], '.', color='red', ms=2)
+            plt.plot(x_all[~good], y_all[~good], '.', color='red', ms=2)
 
 
-            plt.plot(x,y,color="black")
+            plt.plot(x_win,y_win,color="black")
             plt.axvline(x=wavelength,label="Na I D",color="Gray")
             
             
             plt.yticks(fontsize=10)#25)
-            ticks = np.linspace(np.min(x_chopped), np.max(x_chopped), 5)
+            ticks = np.linspace(np.min(x_all), np.max(x_all), 5)
             plt.xticks(ticks,fontsize=10)#25
             plt.text(0.98, 0.02, f"EW={area_over_continuum:.2f} +/- {err:.2f}", ha='right', va='bottom', transform=plt.gca().transAxes,fontsize=15)
             

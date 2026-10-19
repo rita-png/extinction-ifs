@@ -18,7 +18,7 @@ bootstrap=False
 
 
 
-def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name, z, wavelength, width, mw_mask, best_window, best_KS, results_dir=None, save_temp=False):
+def binning(cube, new_wave, region_chopped_Na, errcube, wave, wavelength, mw_mask, best_window, kernel_width_A, results_dir=None, save_temp=False):
     """Perform Voronoi binning and compute EWs per bin.
 
     Writes diagnostic PDFs into `results_dir` and only writes temporary npy files
@@ -48,7 +48,7 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
 
     additive = False
 
-    snr = signal / noise
+    #snr = np.abs(signal / noise)
     snr_total = np.sqrt(np.sum((signal / noise)**2))
 
     target_sn = snr_total/np.sqrt(150) #/2 scaling to have approx. 200 bins
@@ -182,14 +182,14 @@ def binning(cube, new_wave, region_chopped_Na, errcube, wave, file_name, SN_name
 
         if bootstrap:
             spectra_of_bin_err = bootstrap_error_on_sum(bin_pixels)
-            a, b, foo = EW_voronoi_bins(np.array([spectra_of_bin]), new_wave, wavelength, spectra_err_per_bin=spectra_of_bin_err, v=best_window, KS=best_KS, plots=True, text=False, save=os.path.join(bins_dir, f'x{int(bin_x)}y{int(bin_y)}.pdf'))
+            a, b = EW_voronoi_bins(np.array([spectra_of_bin]), new_wave, wavelength, spectra_err_per_bin=spectra_of_bin_err, v=best_window, kernel_width_A=kernel_width_A, plots=True, text=False, save=os.path.join(bins_dir, f'x{int(bin_x)}y{int(bin_y)}.pdf'))
         else:
             bins_dir = os.path.join(results_dir, 'bins_spectra')
             os.makedirs(bins_dir, exist_ok=True)
             if save_temp==True:
-                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
+                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,kernel_width_A=kernel_width_A,plots=True,text=False,save=os.path.join(bins_dir, 'x'+str(int(bin_x))+'y'+str(int(bin_y))+'.pdf'))
             else:
-                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,KS=best_KS,plots=True,text=False)
+                a,b=EW_voronoi_bins(np.array([spectra_of_bin]), new_wave,wavelength,v=best_window,kernel_width_A=kernel_width_A,plots=True,text=False)
 
         
         EWs.append(a[0])

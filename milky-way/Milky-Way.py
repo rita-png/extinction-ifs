@@ -27,10 +27,27 @@ if args.force and args.resume:
     parser.error('Cannot use both --force and --resume')
 
 
+## intialization
+
 SN_name="SN2010ev"#SN2001el"#"SN2010ev"#"SN2007cq"#"SN2011jm"
+element="Sodium"
 
-#
 
+###
+
+if element=="Sodium":
+    wavelength=5893.0
+        
+elif element=="DIB5780":
+    wavelength=5780
+
+elif element=="DIB8620":
+    wavelength=8620
+    
+"""elif element=="Calcium_triplet_1":
+    wavelength=
+elif element=="Calcium_triplet_2":
+    wavelength="""
 
 #done "SN2019ehk" "SN2007cq" "SN2011jm"
 #"SN2010ev" need to confirm if this stays the same after removing halpha stars
@@ -103,8 +120,8 @@ CDELT = float(header["CD3_3"])
 CRPIX = float(header["CRPIX3"])
 wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) + 1 - CRPIX))
 
-na_rest=(5890+5896)/2
-index=findWavelengths(wave, na_rest)[1]
+
+index=findWavelengths(wave, wavelength)[1]
 
 ### defining a region for voronoi binning and Isophotes ###
 y_center=int(y_len/2)
@@ -112,11 +129,11 @@ x_center=int(x_len/2)
 
 width=70
 region=cube[:,y_center-width:y_center+width,x_center-width:x_center+width]
-region_chopped_Na, new_wave = chop_data_cube(region, wave, na_rest-100, na_rest+100)
+region_chopped_Na, new_wave = chop_data_cube(region, wave, wavelength-100, wavelength+100)
 
 ## skipping this cube if its zero at Na
-idx_lo = findWavelengths(wave, na_rest - 10)[1]
-idx_hi = findWavelengths(wave, na_rest + 10)[1]
+idx_lo = findWavelengths(wave, wavelength - 10)[1]
+idx_hi = findWavelengths(wave, wavelength + 10)[1]
 na_region_spectrum = region[idx_lo:idx_hi, :, :]
 
 if np.all(np.isnan(na_region_spectrum)):
@@ -132,7 +149,7 @@ if (not args.force) and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy'))
     print(np.shape(errcube)) #this has to be the same (the uncertainty cube is computted for the region of interest only)
     print(np.shape(region[0]))
 else:
-    errcube = estimate_flux_error(region_chopped_Na,new_wave,na_rest,kernel_size=100)
+    errcube = estimate_flux_error(region_chopped_Na,new_wave,wavelength,kernel_size=100)
     if args.resume and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
         # resume requested but file missing due to --force earlier; continue
         pass
@@ -349,7 +366,7 @@ plt.close()
 ## background plot
 
 """spec = np.nansum(cube[:,50:100,0:25], axis=(1, 2))
-EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(data_dir_sn, 'background.pdf'))"""
+EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False,best_kernel=130,save=os.path.join(data_dir_sn, 'background.pdf'))"""
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
@@ -364,7 +381,7 @@ else:
     np.save(os.path.join(results_dir, 'whole_masked_cube_spec.npy'), spec)
     
 
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
+out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
 EW_all,ERR_all=out[0][0],out[1][0]"""
 
 
@@ -373,7 +390,7 @@ EW_all,ERR_all=out[0][0],out[1][0]"""
 # random subset of spaxels, excluding MW stars
 """subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
 spec = np.nansum(subset_cube, axis=1)
-out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(data_dir_sn,'MW-subset-line-measurement.pdf'))
+out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,save=os.path.join(data_dir_sn,'MW-subset-line-measurement.pdf'))
 
 ##
 
@@ -385,7 +402,7 @@ SNRs=[]
 for i in range(0,100):
     subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
     spec = np.nansum(subset_cube, axis=1)
-    out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False)
+    out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,text=False)
     EWs.append(out[0][0])
     EW_errs.append(out[1][0])
     
@@ -431,7 +448,7 @@ for size in sizes:
     for i in range(0,50):
         subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
         spec = np.nansum(subset_cube, axis=1)
-        out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=400,plots=False,KS=100,text=False,save=False)
+        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,text=False,save=False)
         EWs.append(out[0][0])
         EW_errs.append(out[1][0])
             
@@ -511,7 +528,7 @@ masked_err_cube = np.where(mask, errcube, np.nan)
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 #spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
-out=EW_voronoi_bins(np.array([spectrum]),wave,na_rest,v=400,plots=False,KS=100,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
+out=EW_voronoi_bins(np.array([spectrum]),wave,wavelength,v=400,plots=False,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
@@ -521,10 +538,12 @@ continuum_bound_w_max=new_wave[-1]
 print(type(continuum_bound_w_min), continuum_bound_w_min)
 print(type(continuum_bound_w_max), continuum_bound_w_max)
 
-best_KS = best_continuum(wave, spectrum, na_rest,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
+#best_KS = best_continuum(wave, spectrum, wavelength,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
+
+best_kernel = best_continuum(wave, spectrum,wavelength*(1+z), vel=600, kernel_widths_A=np.arange(20, 200, 10),plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
 
 # inspect best window
-best_window = best_integration_window(wave, spectrum, wavelength=na_rest,best_KS=best_KS,plots=True,save=os.path.join(results_dir,'Best-window.pdf'))
+best_window = best_integration_window(wave, spectrum, wavelength=wavelength,best_kernel=best_kernel,plots=True,save=os.path.join(results_dir,'Best-window.pdf'))
 
 ## Isophotes
 if isophotes==True:
@@ -670,7 +689,7 @@ if isophotes==True:
                 if args.save_temp:
                     np.save(os.path.join(results_dir,'temp_window_cont.npy'), np.column_stack((wave, spec)))
 
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'isophotes-spec-sum',str(int(sma))+'.pdf'))
+            out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False, kernel_width_A=best_kernel,text=False,save=os.path.join(results_dir,'isophotes-spec-sum',str(int(sma))+'.pdf'))
             EWs_sum.append(out[0][0])
             EW_errs_sum.append(out[1][0])
 
@@ -681,7 +700,7 @@ if isophotes==True:
         if np.any(np.isnan(spec[index-100:index+100])):
             print("Spectrum is empty / all NaNs, skipping")
         else:
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'isophotes-spec-median',str(int(sma))+'.pdf'))
+            out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False, kernel_width_A=best_kernel,text=False,save=os.path.join(results_dir,'isophotes-spec-median',str(int(sma))+'.pdf'))
             EWs_median.append(out[0][0])
             EW_errs_median.append(out[1][0])
 
@@ -704,7 +723,7 @@ if isophotes==True:
     ax[1].set_ylim([0,20])
     ax[0].text(0.02, 0.96, f"EW={weighted_mean:.2f} +/- {weighted_std_dev:.2f}", ha='left', va='top', transform=ax[0].transAxes,fontsize=20)
     ax[0].set_title("EW for spectra inside isophotes, using sum of spectra",fontsize=15)
-    ax[1].scatter(smas,np.divide(EWs_sum,EW_errs_sum))
+    ax[1].scatter(smas,np.abs(np.divide(EWs_sum,EW_errs_sum)))
     ax[1].set_xlabel("Semi major axis",fontsize=12)
     ax[1].set_ylabel("SNR",fontsize=12)
 
@@ -763,11 +782,11 @@ else:
             
             subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
             spec = np.nansum(subset_cube, axis=1)
-            out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=False)
+            out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False,kernel_width_A=best_kernel,text=False,save=False)
             EWs.append(out[0][0])
             EW_errs.append(out[1][0])
             if size==3366 and i==1:
-                out=EW_voronoi_bins(np.array([spec]),wave,na_rest,v=best_window,plots=False,KS=best_KS,text=False,save=os.path.join(results_dir,'example-spectrum.pdf'))
+                out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False,kernel_width_A=best_kernel,text=False,save=os.path.join(results_dir,'example-spectrum.pdf'))
             
         yy,ybar=weighted_average(EWs,EW_errs)
         weighted_EWs.append(yy)
@@ -800,7 +819,7 @@ plt.close()
 
 import voronoi2
 
-centroids_vor, EWs_vor, EW_errs_vor, spectra_and_bins = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,file_name,SN_name,z,na_rest,width,mw_mask,best_window,best_KS, results_dir=data_dir_sn,save_temp=args.save_temp)#,target_sn = target_snr)#750 for f/c#250
+centroids_vor, EWs_vor, EW_errs_vor, spectra_and_bins = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,wavelength,mw_mask,best_window, kernel_width_A=best_kernel, results_dir=data_dir_sn,save_temp=args.save_temp)
 
 """plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
@@ -833,28 +852,42 @@ MODELS = {
 
 results = {name: {"bic": [], "chi2r": [], "params": [], "models": [], "pcov": []} for name in MODELS}
 
-mask_wave     = (new_wave > na_rest - 18) & (new_wave < na_rest + 18)
+mask_wave     = (new_wave > wavelength - 18) & (new_wave < wavelength + 18)
 wave_fit = new_wave[mask_wave]
 continuum_bins = []
+
+EWs_ori, EWs_ori_err = np.full(len(spec_voronoi_bins), np.nan), np.full(len(spec_voronoi_bins), np.nan)
 
 # finding the continuum of each bin
 for i in range(len(spec_voronoi_bins)):
     #print("bin ",i)
+    x, y = new_wave, spec_voronoi_bins[i]
 
-    x,y=new_wave,spec_voronoi_bins[i]
+    c = 3e5
+    bound1, bound2 = wavelength*(1+z)*(1 - best_window/c), wavelength*(1+z)*(1 + best_window/c)
+    
+    continuum, good = fit_continuum(x, y, bound1, bound2, width_A=best_kernel)
+    continuum_bins.append(continuum)
+
+    ## subtracting the continuum from the bin spectra
+    flux = y - continuum
+    flux_fit = flux[mask_wave]
+
+    #old continuum
+    """x,y=new_wave,spec_voronoi_bins[i]
 
     x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
 
     # continuum
     delta_x = np.average(np.diff(x_cont))  # spacing in Å between x points
         
-    kernel_size=best_KS
+    kernel_size= ?????????
     kernel = cosine_kernel(kernel_size)
     cont = convolve1d(y_cont, kernel, mode='nearest')
     interp=interp1d(x_cont, cont, kind='cubic',fill_value="extrapolate")
         
     continuum=interp(new_wave)
-    continuum_bins.append(continuum)
+    continuum_bins.append(continuum)"""
 
     ## subtracting the continuum to the bin spectra
     flux     = spec_voronoi_bins[i] - continuum
@@ -868,7 +901,6 @@ for i in range(len(spec_voronoi_bins)):
             popt, pcov = curve_fit(
                 model_fn, wave_fit, flux_fit,
                 p0=p0,
-                #bounds=MODEL_BOUNDS[name],
                 maxfev=20000
             )
             mflux = model_fn(wave_fit, *popt)
@@ -883,6 +915,12 @@ for i in range(len(spec_voronoi_bins)):
             results[name]["params"].append(None)
             results[name]["models"].append(None)
             results[name]["pcov"].append(None)
+
+
+EWs_ori, EWs_ori_err = EW_voronoi_bins(spec_voronoi_bins, x, wavelength, v=400, plots=False)
+EWs_ori, EWs_ori_err = np.array(EWs_ori), np.array(EWs_ori_err)
+results["EWs_ori"]  = EWs_ori
+results["EWs_ori_err"]  = EWs_ori_err
 
 rows = []
 for name in MODELS:
@@ -907,7 +945,7 @@ for model_name, (model_fn, _) in MODELS.items():
     model_params = results[model_name]["params"]
     model_fluxes = results[model_name]["models"]
     EWs_corr = np.full(x, np.nan)
-    EWs_ori = np.full(x, np.nan)
+    EW_corr_err = np.full(x, np.nan)
     ncols = int(np.ceil(np.sqrt(x)))
     nrows = int(np.ceil(x / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(35, 25), sharex=True, sharey=True)
@@ -945,24 +983,24 @@ for model_name, (model_fn, _) in MODELS.items():
         ax.set_title(f"Bin {bin_id} ", fontsize=14)### |  BIC={bic_val:.1f}  χ²ᵣ={chi2_val:.2f}", fontsize=14)
         if label:
             ax.legend(fontsize=12)
-        ax.set_xlim(na_rest - 30, na_rest + 30)
+        ax.set_xlim(wavelength - 30, wavelength + 30)
         ax.set_ylim(np.min(data) * 1.05, np.max(data) * 1.05)
         ax.tick_params(axis="both", labelsize=14)
         EWs_corr[bin_id] = -np.trapezoid(absorption_model / continuum, wave_fit) #absorption_model if flux-continuum
-        EWs_ori[bin_id] = -np.trapezoid(data[mask_wave] / continuum, wave_fit) #data[mask_wave] is flux-continuum
+        
         if model_name in ("A", "B"):
             A1, A2 = popt[0], popt[1]
             C = np.median(continuum)
             EW_analytic = -(np.sqrt(2 * np.pi) * SIGMA_FIXED * (A1 + A2) / C)
             pcov = results[model_name]["pcov"][bin_id]
-            EW_corr_err = (
+            EW_corr_err[bin_id] = (
                 np.sqrt(2 * np.pi) * SIGMA_FIXED / C
                 * np.sqrt(pcov[0, 0] + pcov[1, 1] + 2 * pcov[0, 1])
             )
-            print(
+            """print(
                 f"Model {model_name}, bin {bin_id}: Numerical EW = {EWs_corr[bin_id]:.3f}, "
-                f"Analytical EW = {EW_analytic:.3f} +/- {EW_corr_err:.3f}"
-            )
+                f"Analytical EW = {EW_analytic:.3f} +/- {EW_corr_err[bin_id]:.3f}"
+            )"""
 
     for ax in axes[x:]:
         ax.axis("off")
@@ -975,7 +1013,6 @@ for model_name, (model_fn, _) in MODELS.items():
     plt.show()
     print(f"Saved: BIN_fits_{safe_name}.pdf")
     results[model_name]["EWs_corr"] = EWs_corr
-    results[model_name]["EWs_ori"]  = EWs_ori
     results[model_name]["EW_corr_err"] = EW_corr_err
 
 
@@ -999,7 +1036,6 @@ for model_name in MODELS:
     print(f"  Model {model_name}: {np.sum(best_model_by_bin == model_name)} bins")
 
 
-
 ##### defining the symbolic expressions for the models in LaTeX format, for display purposes
 x_s, A1, A2, A3 = sp.symbols('x A_1 A_2 A_3')
 mu1, mu2, mu3 = sp.symbols('mu_1 mu_2 mu_3')
@@ -1014,7 +1050,7 @@ na1 = sp.Symbol('mu_{Na,1}')
 na2 = sp.Symbol('mu_{Na,2}')
 models_sym = {
     "A": G(A1, na1,  sM)    + G(A2, na2, sM),
-    "B": G(A1, na1,  sM)    + G(A2, na2, sM)    + G(A3, na_rest, sM)
+    "B": G(A1, na1,  sM)    + G(A2, na2, sM)    + G(A3, wavelength, sM)
 }
 param_notes = {
     
@@ -1036,82 +1072,61 @@ for name in MODELS:
         f"</p>"
     ))
 
-##### EW histogram using the best BIC model selected independently for each bin
+##### Corrected EW histogram using the best BIC model selected independently for each bin
 
 colors = [plt.cm.Set1(i) for i in [0, 1, 2]]
 colors = ['#E74C3C', '#3498DB', "#57469A"]  # red, blue, green
 
-# pick the bins that have a valid best-fitting model
-selected_bins = [bin_id for bin_id, model_name in enumerate(best_model_by_bin)]
-# EWs_ori_c and EWs_corr_c are the original and corrected EW, using the best-fitting model for each bin
-EWs_ori_c = np.array([
-    results[best_model_by_bin[bin_id]]["EWs_ori"][bin_id]
-    for bin_id in selected_bins
-])
-EWs_corr_c = np.array([
+
+ # Select bins with a successful fit and finite values needed by the plots.
+selected_bins = [
+    bin_id for bin_id, model_name in enumerate(best_model_by_bin)
+    if model_name is not None
+    and np.isfinite(centroids_vor[bin_id])
+    and np.isfinite(results[model_name]["bic"][bin_id])
+    and np.isfinite(results[model_name]["EWs_corr"][bin_id])
+    and np.isfinite(results[model_name]["EW_corr_err"][bin_id])
+]
+# Corrected EWs use the best-fitting model for each bin.
+EWs_corr_best_model = np.array([
     results[best_model_by_bin[bin_id]]["EWs_corr"][bin_id]
     for bin_id in selected_bins
 ])
 
-EWs_corr_errs_c = np.array([
+EWs_corr_errs_best_model = np.array([
     results[best_model_by_bin[bin_id]]["EW_corr_err"][bin_id]
     for bin_id in selected_bins
 ])
 
-quit()
-#continue here
-"""
-if element=="Potassium":
-    central_wavelength=7665
-    velocity_window=400
-    kernel_size=90
+selected_bins = np.asarray(selected_bins, dtype=int)
 
-elif element=="Halpha":
-    central_wavelength=6562.8
-    
-elif element=="DIB5780":
-    central_wavelength=6613.6
+# computing weighted averages for the corrected EWs and the original EWs
+weighted_avg_ew, weighted_avg_ew_err = weighted_average(EWs_corr_best_model, EWs_corr_errs_best_model)
+EWs_ori_weighted_avg, EWs_ori_weighted_avg_err = weighted_average(EWs_ori, EWs_ori_err)
 
-elif element=="DIB8620":
-    central_wavelength=8620
-    kernel_size=30
-    velocity_window=170
-    
-elif element=="Calcium":
-    central_wavelength=3933.7
-    
-elif element=="Sodium":
-    central_wavelength=5893.0
-    velocity_window=600
-    kernel_size=90
-
-elif element=="DIB5797":
-    central_wavelength=5797
-    kernel_size=20
-    velocity_window=170
-
-
-    """
-median_ori  = np.median(EWs_ori_c)
-sigma_ori   = np.std(EWs_ori_c)
-median_corr = np.median(EWs_corr_c)
-sigma_corr  = np.std(EWs_corr_c)
 
 plt.figure(figsize=(11, 6))
+
 plt.title("Spaxels EW measurements using the best model per bin")
+plt.hist(EWs_ori, label="EW from original spectra", alpha=0.5, color=colors[0])
+plt.axvline(x=EWs_ori_weighted_avg, color=colors[0], label="Weighted average from original EWs", linestyle="--")
+plt.axvspan(EWs_ori_weighted_avg - EWs_ori_weighted_avg_err, EWs_ori_weighted_avg + EWs_ori_weighted_avg_err, alpha=0.15, color=colors[0])
 
-plt.hist(EWs_ori_c,  label="EW from original spectra",     alpha=0.5,color=colors[0])
-plt.axvline(x=median_ori, color=colors[0])
-plt.axvspan(median_ori - sigma_ori, median_ori + sigma_ori, alpha=0.15, color=colors[0])
+plt.hist(EWs_corr_best_model, label="EW from model w/out emission", alpha=0.5, color=colors[2])
+plt.axvline(weighted_avg_ew, color=colors[2], linestyle="--", label="Weighted average from model w/out emission")
+plt.axvspan(
+    weighted_avg_ew - weighted_avg_ew_err,
+    weighted_avg_ew + weighted_avg_ew_err,
+    alpha=0.15,
+    color=colors[2]
+)
 
-plt.hist(EWs_corr_c, label="EW from model w/out emission", alpha=0.5,color=colors[2])#aqui
-plt.axvline(x=median_corr, color=colors[2])
-plt.axvspan(median_corr - sigma_corr, median_corr + sigma_corr, alpha=0.15, color=colors[2])
+
 
 plt.legend(fontsize=13)
-plt.text(0.02, 0.96, f"Original:   Median={median_ori:.2f} Å,  σ={sigma_ori:.2f} Å",
+plt.text(0.02, 0.96, f"Original:   Weighted average = {EWs_ori_weighted_avg:.2f} ± {EWs_ori_weighted_avg_err:.2f} Å",
          ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
-plt.text(0.98, 0.10, f"Corrected:  Median={median_corr:.2f} Å,  σ={sigma_corr:.2f} Å",
+plt.text(0.98, 0.10, f"Corrected:  Weighted average = {weighted_avg_ew:.2f} ± {weighted_avg_ew_err:.2f} Å",
          ha='right', va='bottom', transform=plt.gca().transAxes, fontsize=13)
 plt.xlabel("EW (Å)", fontsize=13)
 plt.ylabel("N bins", fontsize=13)
@@ -1119,47 +1134,33 @@ plt.tight_layout()
 plt.savefig(os.path.join(data_dir_sn,"EW_fits_histogram.pdf"), bbox_inches='tight')
 
 ## PLOTTING FINAL PLOTS: EW vs distance to the center and EW vs BIC
-distance_indices = np.asarray(selected_bins, dtype=int)
-distance_values = centroids_vor[distance_indices]
-distance_models = best_model_by_bin[distance_indices]
-distance_ews = np.array([
-    results[best_model_by_bin[bin_id]]["EWs_corr"][bin_id]
-    for bin_id in distance_indices
-])
-distance_ew_errs = np.array([
-    results[best_model_by_bin[bin_id]]["EW_corr_err"][bin_id]
-    for bin_id in distance_indices
-])
-distance_bics = np.array([
-    results[best_model_by_bin[bin_id]]["bic"][bin_id]
-    for bin_id in distance_indices
-])
-
-weighted_distance_ew, weighted_distance_err = weighted_average(EWs_corr_c, EWs_corr_errs_c)
 
 
+print("UNDERSTAND THE FOLLOWING PLOT: EW vs distance to the center and EW vs BIC")
 model_colors = {"A": colors[0], "B": colors[1]}
 fig, (ax_distance, ax_bic) = plt.subplots(2, 1, figsize=(11, 10), sharey=True)
 for model_name, model_color in model_colors.items():
-    model_mask = distance_models == model_name
+    model_mask = best_model_by_bin[selected_bins] == model_name
     ax_distance.errorbar(
-        distance_values[model_mask], distance_ews[model_mask],
-        yerr=distance_ew_errs[model_mask], fmt="o", color=model_color,
+        centroids_vor[selected_bins][model_mask], EWs_corr_best_model[model_mask],
+        yerr=EWs_corr_errs_best_model[model_mask], fmt="o", color=model_color,
         markeredgecolor="black", capsize=5, zorder=2,
         label=f"Model {model_name}"
     )
     ax_bic.errorbar(
-        distance_bics[model_mask], distance_ews[model_mask],
-        yerr=distance_ew_errs[model_mask], fmt="o", color=model_color,
+        [results[best_model_by_bin[bin_id]]["bic"][bin_id]
+         for bin_id in selected_bins[model_mask]],
+        EWs_corr_best_model[model_mask],
+        yerr=EWs_corr_errs_best_model[model_mask], fmt="o", color=model_color,
         markeredgecolor="black", capsize=5, zorder=2,
         label=f"Model {model_name}"
     )
 
-ax_distance.axhline(weighted_distance_ew, color=colors[2], linestyle="--",label="Weighted average")
-ax_distance.axhspan(weighted_distance_ew - weighted_distance_err,weighted_distance_ew + weighted_distance_err,color=colors[2], alpha=0.15)
-ax_bic.axhline(weighted_distance_ew, color=colors[2], linestyle="--",label="Weighted average")
-ax_bic.axhspan(weighted_distance_ew - weighted_distance_err,weighted_distance_ew + weighted_distance_err,color=colors[2], alpha=0.15)
-ax_distance.text(0.02, 0.05,f"Weighted average = {weighted_distance_ew:.2f} +/- {weighted_distance_err:.2f} Å",ha="left", va="bottom", transform=ax_distance.transAxes, fontsize=13)
+ax_distance.axhline(weighted_avg_ew, color=colors[2], linestyle="--",label="Weighted average")
+ax_distance.axhspan(weighted_avg_ew - weighted_avg_ew_err,weighted_avg_ew + weighted_avg_ew_err,color=colors[2], alpha=0.15)
+ax_bic.axhline(weighted_avg_ew, color=colors[2], linestyle="--",label="Weighted average")
+ax_bic.axhspan(weighted_avg_ew - weighted_avg_ew_err,weighted_avg_ew + weighted_avg_ew_err,color=colors[2], alpha=0.15)
+ax_distance.text(0.02, 0.05,f"Weighted average = {weighted_avg_ew:.2f} +/- {weighted_avg_ew_err:.2f} Å",ha="left", va="bottom", transform=ax_distance.transAxes, fontsize=13)
 ax_distance.set_xlabel("Distance from image center (px)", fontsize=13)
 ax_distance.set_ylabel("Corrected EW (Å)", fontsize=13)
 ax_distance.set_title("Corrected EW versus distance from image center")
