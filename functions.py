@@ -57,7 +57,7 @@ from photutils.isophote import build_ellipse_model
 from astropy.modeling.models import Gaussian2D
 from photutils.datasets import make_noise_image
 
-def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bound_w_max,plots=False,save=""):
+"""def best_continuum_old(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bound_w_max,plots=False,save=""):
 
     #KSs=np.arange(20,200,10)
     v_seps = np.arange(500,1400,50)
@@ -84,7 +84,7 @@ def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bo
 
         fig, ax = plt.subplots(1, 3, figsize=(20, 8))
         fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
-
+v,EWs,color="bl
 
         ax[0].scatter(v_seps,EWs,color="black")
         ax[0].plot(v_seps,EWs,color="black",alpha=0.5)
@@ -110,8 +110,58 @@ def best_continuum(wave, spec, wavelength,vel,continuum_bound_w_min,continuum_bo
     print("best continuum kernel size is ", KSs[np.argmax(SNR_lines)])
 
 
-    return KSs[np.argmax(SNR_lines)]
+    return KSs[np.argmax(SNR_lines)]"""
 
+
+def best_continuum(wave, spec, wavelength,vel, kernel_widths_A=np.arange(20, 200, 10),plots=False,save=""):
+
+    
+    EWs, SNR_lines, EWs_err=[],[],[]
+    
+    v_sep = 3e5 * np.asarray(kernel_widths_A) / wavelength   # kernel width in km/s
+    
+    for w in kernel_widths_A:
+        print("Kernel width (A): ", w, "Velocity separation (km/s): ", 3e5 * w / wavelength)
+        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=vel,kernel_width_A=w,plots=True)
+    
+        EWs.append(out[0][0]); EWs_err.append(out[1][0]); SNR_lines.append(out[0][0]/out[1][0])
+    
+        
+
+    
+    if plots==True:
+        
+        fig, ax = plt.subplots(1, 3, figsize=(20, 8))
+        fig.suptitle("EW measurement for different continuum estimates", fontsize=17)
+
+
+        ax[0].scatter(v_sep,EWs,color="black")
+        ax[0].plot(v_sep,EWs,color="black",alpha=0.5)
+        ax[0].set_ylabel("EW",fontsize=15)
+        ax[0].set_xlabel("Node Separation (km/s)",fontsize=16)
+
+        ax[1].scatter(v_sep,EWs_err,color="black")
+        ax[1].plot(v_sep,EWs_err,color="black",alpha=0.5)
+        ax[1].set_ylabel(r"$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[1].set_xlabel("Node Separation (km/s)",fontsize=16)#used to be Continuum kernel size
+
+        ax[2].scatter(v_sep,SNR_lines,color="black")
+        ax[2].plot(v_sep,SNR_lines,color="black",alpha=0.5)
+        ax[2].set_ylabel(r"EW/$\sigma_{\mathrm{EW}}$",fontsize=15)
+        ax[2].set_xlabel("Node Separation (km/s)",fontsize=16)
+
+        
+        print("## Saving image with name ", save)
+        #plt.savefig(save, bbox_inches='tight')
+        print("NOT SAVING IMAGE")
+        plt.show()
+        plt.close()
+
+
+    print("best continuum kernel size is ", kernel_widths_A[np.argmax(SNR_lines)], "with velocity separation (km/s): ", v_sep[np.argmax(SNR_lines)])
+
+
+    return kernel_widths_A[np.argmax(SNR_lines)]
 
 # convert kernel size (in pixels) to velocity separation (km/s).
 def get_velocity_separation(kernel_size, lambda_center, continuum_bound_w_min, continuum_bound_w_max):
@@ -1919,8 +1969,7 @@ def bootstrap_error_on_sum(flux, n_boot=1000, seed=None):
     return np.nanstd(boot_sums, axis=0, ddof=1)
 
 
-
-def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=3, n_iter=3):
+def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=1.5, n_iter=3):
     dx = np.median(np.diff(x))
     k = cosine_kernel(2 * int(round(width_A / dx / 2)) + 1)
     good = (x < lo - margin) | (x > hi + margin)        # everything outside the line window
@@ -1933,6 +1982,28 @@ def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=3, n_iter=3):
         good = keep_window & (np.abs(r) < nsigma * 1.4826 * np.median(np.abs(r[good])))
 
     return cont, good
+
+"""
+def fit_continuum(x, y, lo, hi, width_A=25, margin=5, nsigma=2, n_iter=3, det_A=5):
+    dx = np.median(np.diff(x))
+    odd = lambda A: 2 * int(round(A / dx / 2)) + 1
+    k     = cosine_kernel(odd(width_A))        # final continuum
+    k_ref = cosine_kernel(odd(2 * width_A))    # wide reference, ignores lines
+    k_det = cosine_kernel(odd(det_A))          # light smoothing to beat noise
+
+    window = (x >= lo - margin) & (x <= hi + margin)   # line being measured
+    good = ~window
+
+    for _ in range(n_iter):
+        yfill = np.interp(x, x[good], y[good])
+        r = convolve1d(y, k_det, mode='nearest') - convolve1d(yfill, k_ref, mode='nearest')
+        sigma = 1.4826 * np.median(np.abs(r[good] - np.median(r[good])))
+        good = ~window & (np.abs(r) < nsigma * sigma)
+
+    yfill = np.interp(x, x[good], y[good])
+    cont = convolve1d(yfill, k, mode='nearest')
+    return cont, good
+"""
 #kernel_widt=96.5
 def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,plots=True,kernel_width_A=25,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
@@ -2071,7 +2142,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             
             #plt.plot(x_cont,interp(x_cont),label="Continuum",color="Orange")
             plt.plot(x_chopped, cont_full, label="Continuum", color="Orange")
-            plt.plot(x_cont, y_cont, '.', color='red', ms=2)
+            plt.plot(x_cont, y_cont, '.', color='blue', ms=2)
+            plt.plot(x_chopped[~good], y_chopped[~good], '.', color='red', ms=2)
 
 
             plt.plot(x,y,color="black")
