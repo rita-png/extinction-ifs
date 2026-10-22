@@ -29,25 +29,52 @@ if args.force and args.resume:
 
 ## intialization
 
-SN_name="SN2010ev"#SN2001el"#"SN2010ev"#"SN2007cq"#"SN2011jm"
-element="Sodium"
+SN_name="SN2007cq"#"SN2007cq"#"SN2011jm"
+element="DIB4964"#"DIB5780"#"DIB8620"#"DIB5780"#"Sodium"
 
 
 ###
 
 if element=="Sodium":
     wavelength=5893.0
+    save_temp=False
+    N_bins = 150
+    best_window = 400
+    best_kernel = 130
+    nsigma=1.5
         
 elif element=="DIB5780":
     wavelength=5780
+    save_temp=True
+    N_bins=40
+    best_kernel = 55
+    nsigma=1.5
+    best_window = 200
+
+elif element=="DIB4964":
+    wavelength=4964
+    save_temp=True
+    N_bins=40
+    best_kernel = 55
+    nsigma=1.5
+    best_window = 200
 
 elif element=="DIB8620":
     wavelength=8620
+    save_temp=True
+    N_bins=50
     
-"""elif element=="Calcium_triplet_1":
-    wavelength=
+elif element=="Calcium_triplet_1":
+    wavelength=8498
+    save_temp=True
+    N_bins=20
+
 elif element=="Calcium_triplet_2":
-    wavelength="""
+    wavelength=8542
+    save_temp=True
+    N_bins=50
+
+
 
 #done "SN2019ehk" "SN2007cq" "SN2011jm"
 #"SN2010ev" need to confirm if this stays the same after removing halpha stars
@@ -80,7 +107,7 @@ elif SN_name=="CSP14aaq":
     ra,dec=93.45008,-67.920715
     z=0.036518
 elif SN_name=="LSQ12ca":
-    ra,dec=82.765114,	-19.801537
+    ra,dec=82.765114,-19.801537
     z=0.098752
 elif SN_name=="SN2019ehk":
     z=0.0043
@@ -92,13 +119,14 @@ elif SN_name=="SN2001el":
     z=0.003896
     ra,dec=56.12738,-44.63992
 
-# Minimal: assume local DATA root ../../DATA
+# defining directories
 DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'DATA'))
-data_dir_sn = os.path.join(DATA_ROOT, SN_name)
-os.makedirs(data_dir_sn, exist_ok=True)
-results_dir = os.path.join(data_dir_sn, 'auxiliar-results')
+data_dir_sn_element = os.path.join(DATA_ROOT, SN_name, element)
+os.makedirs(data_dir_sn_element, exist_ok=True)
+
+results_dir = os.path.join(data_dir_sn_element, 'auxiliar-results')
 os.makedirs(results_dir, exist_ok=True)
-file_name = os.path.join(data_dir_sn, SN_name + '.fits')
+file_name = os.path.join(os.path.join(DATA_ROOT, SN_name), SN_name + '.fits')
 
 
 data = fits.open(file_name)
@@ -124,6 +152,7 @@ wave = np.array(CRVAL + CDELT * (np.arange(NAXIS) + 1 - CRPIX))
 index=findWavelengths(wave, wavelength)[1]
 
 ### defining a region for voronoi binning and Isophotes ###
+print("CHANGE THIS WAY OF FINDING CNETER OF THE CUBE")
 y_center=int(y_len/2)
 x_center=int(x_len/2)
 
@@ -143,17 +172,17 @@ if np.all(np.isnan(na_region_spectrum)):
 ###
 
 # import cube of uncertainties
-if (not args.force) and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
-    errcube = np.load(os.path.join(data_dir_sn, 'errcube.npy'))
+if (not args.force) and os.path.exists(os.path.join(DATA_ROOT, SN_name, 'errcube.npy')):
+    errcube = np.load(os.path.join(DATA_ROOT, SN_name, 'errcube.npy'))
     print("Read the error cube from a npy file")
     print(np.shape(errcube)) #this has to be the same (the uncertainty cube is computted for the region of interest only)
     print(np.shape(region[0]))
 else:
     errcube = estimate_flux_error(region_chopped_Na,new_wave,wavelength,kernel_size=100)
-    if args.resume and os.path.exists(os.path.join(data_dir_sn, 'errcube.npy')):
+    if args.resume and os.path.exists(os.path.join(data_dir_sn_element, 'errcube.npy')):
         # resume requested but file missing due to --force earlier; continue
         pass
-    np.save(os.path.join(data_dir_sn, 'errcube.npy'),errcube)
+    np.save(os.path.join(data_dir_sn_element, 'errcube.npy'),errcube)
 
 
 ##
@@ -174,7 +203,79 @@ mean, median, std = sigma_clipped_stats(image, sigma=3.0)
 # using DAOStarFinder to detect stars
 daofind = DAOStarFinder(fwhm=4.0, threshold=7*std)#5, 4
 sources = daofind(image - median)"""
+"""
+### new_ cross match with gaia
+from astropy.coordinates import SkyCoord
+from astroquery.gaia import Gaia
+import astropy.units as u
+from scipy.spatial import cKDTree
 
+wcs = WCS(data[1].header).celestial
+
+# --- 1. Your existing continuum detection (unchanged) ---
+stacked_cube = np.nanmedian(cube[index-100:index+100, :, :], axis=0)
+image = stacked_cube
+mean, median, std = sigma_clipped_stats(image, sigma=3.0)
+daofind = DAOStarFinder(fwhm=4.0, threshold=7*std)
+sources = daofind(image - median)
+if sources is not None:
+    x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
+    # --- 2. Narrow-band Halpha image at the HOST's redshift ---
+    ha_rest = 6563
+    ha_obs = ha_rest * (1 + z)
+    ha_index = findWavelengths(wave, ha_obs)[1]
+
+    halfwidth = 10  # pixels, narrow -- just the line core
+    halpha_image = np.nansum(cube[ha_index-halfwidth:ha_index+halfwidth, :, :], axis=0)
+
+    mean_ha, median_ha, std_ha = sigma_clipped_stats(halpha_image, sigma=3.0)
+    daofind_ha = DAOStarFinder(fwhm=4.0, threshold=5*std_ha)
+    sources_ha = daofind_ha(halpha_image - median_ha)
+
+# --- 3a. pixel -> 
+src_sky = wcs.pixel_to_world(x_coords, y_coords)
+
+# --- 3b. Gaia query over the field ---
+ny, nx = image.shape
+center = wcs.pixel_to_world(nx/2, ny/2)
+corner = wcs.pixel_to_world(0, 0)
+radius = center.separation(corner) * 1.05
+gaia = Gaia.cone_search_async(center, radius=radius).get_results()
+
+# keep only real stars: significant parallax or proper motion
+pm = np.hypot(gaia['pmra'], gaia['pmdec'])
+pm_err = np.hypot(gaia['pmra_error'], gaia['pmdec_error'])
+is_star_gaia = (gaia['parallax_over_error'] > 3) | (pm / pm_err > 3)
+gaia_stars = SkyCoord(gaia['ra'][is_star_gaia], gaia['dec'][is_star_gaia], unit='deg')
+
+gaia_all = SkyCoord(gaia['ra'], gaia['dec'], unit='deg')
+sep_all = src_sky.match_to_catalog_sky(gaia_all)[1].arcsec
+print(len(gaia), is_star_gaia.sum())
+print(np.round(sep_all, 2))
+
+# --- 3c. match detections to Gaia ---
+match_gaia = 1.0 * u.arcsec
+gaia_star = src_sky.match_to_catalog_sky(gaia_stars)[1] < match_gaia   # matches a Gaia star
+gaia_any = src_sky.match_to_catalog_sky(gaia_all)[1] < match_gaia      # matches any Gaia source
+
+
+# --- 3d. your Halpha test, kept as fallback for sources Gaia doesn't know ---
+match_radius = 3.0
+if sources_ha is not None and len(sources_ha) > 0:
+    ha_coords = np.transpose((sources_ha['x_centroid'], sources_ha['y_centroid']))
+    cont_coords = np.transpose((x_coords, y_coords))
+    dist, _ = cKDTree(ha_coords).query(cont_coords, k=1)
+    no_ha = dist > match_radius
+else:
+    no_ha = np.ones(len(sources), dtype=bool)
+
+# star if Gaia says so, or if Gaia has no entry and there is no Halpha
+is_mw_star = gaia_star | (~gaia_any & no_ha)
+
+sources_filtered = sources[is_mw_star]
+print(f"Gaia stars: {gaia_star.sum()}, Halpha-only stars: {(is_mw_star & ~gaia_star).sum()}, "
+      f"kept {is_mw_star.sum()} / {len(sources)}")
+"""
 ### new: only keeping sources that are not in halpha host emission
 
 from scipy.spatial import cKDTree
@@ -218,17 +319,7 @@ if sources is not None:
     print(f"Kept {is_mw_star.sum()} / {len(sources)} sources after Halpha cross-match")
 
 
-
-
-    sources=sources_filtered
-
-
-
-
-
-
-
-
+    sources=sources#####sources_filtered
 
 
     x_coords, y_coords = sources['x_centroid'], sources['y_centroid']
@@ -239,7 +330,7 @@ else:
 
 
 ##this is just needed for sn2010ev
-ny, nx = (image).shape
+"""ny, nx = (image).shape
 if SN_name=="SN2010ev":
     
     x0, y0 = nx/2, ny/2
@@ -260,7 +351,7 @@ if SN_name=="SN2010ev":
 
 
     print("Warning! Removing ", np.sum(~keep)," stars from the mask in the center of the image. The mask has a total of ",np.sum(keep)," masked stars.")
-
+"""
 ##
 
 list(zip(x_coords, y_coords))
@@ -354,19 +445,20 @@ mw_mask=mask[y_center-width:y_center+width,x_center-width:x_center+width]
 
 n_valid_pixels = np.count_nonzero(mask)
 
+ny, nx = (image).shape
 print("\nOriginal image had ", ny*nx," pixels, the one after masking MW stars has ", n_valid_pixels)
 
 
 lo,up = np.nanpercentile(image,2),np.nanpercentile(image,98)
 plt.contour(mask, levels=[0.5], colors='red', linewidths=1, origin='lower')
 plt.imshow(image,cmap='Blues_r',origin='lower',clim=(lo,up))
-plt.savefig(os.path.join(data_dir_sn, 'MW-masked-cube.pdf'), bbox_inches='tight')
+plt.savefig(os.path.join(os.path.join(DATA_ROOT, SN_name), 'MW-masked-cube.pdf'), bbox_inches='tight')
 plt.close()
 
 ## background plot
 
 """spec = np.nansum(cube[:,50:100,0:25], axis=(1, 2))
-EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False,best_kernel=130,save=os.path.join(data_dir_sn, 'background.pdf'))"""
+EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False,best_kernel=best_kernel,save=os.path.join(data_dir_sn_element, 'background.pdf'))"""
 
 
 ## one single Av of median spectra using all spaxels, excluding MW stars
@@ -381,99 +473,13 @@ else:
     np.save(os.path.join(results_dir, 'whole_masked_cube_spec.npy'), spec)
     
 
-out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
+out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False, kernel_width_A=best_kernel,save=os.path.join(results_dir, 'MW-single-line-measurement.pdf'))
 EW_all,ERR_all=out[0][0],out[1][0]"""
 
 
 ##
 
-# random subset of spaxels, excluding MW stars
-"""subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
-spec = np.nansum(subset_cube, axis=1)
-out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,save=os.path.join(data_dir_sn,'MW-subset-line-measurement.pdf'))
-
-##
-
-# random subset of spaxels, excluding MW stars, diff subsets
-print("Measuring EW of different subsets of spaxels")
-EWs=[]
-EW_errs=[]
-SNRs=[]
-for i in range(0,100):
-    subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=500)
-    spec = np.nansum(subset_cube, axis=1)
-    out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,text=False)
-    EWs.append(out[0][0])
-    EW_errs.append(out[1][0])
-    
-
-
-SNRs=np.divide(EWs,EW_errs)
-
-scatter=plt.errorbar(np.arange(0,len(EWs)), EWs, yerr=EW_errs, fmt='o', c='Blue', capsize=5,zorder=1)
-scatter=plt.scatter(np.arange(0,len(EWs)),EWs,c=SNRs,s=100,zorder=2)
-plt.colorbar(scatter, label='SNR')
-plt.xlabel("# Subset of pixels",fontsize=15)
-plt.ylabel(" EW for a given subset of pixels",fontsize=15)
-yy,ybar=weighted_average(EWs,EW_errs)
-plt.axhline(y=yy)
-plt.axhspan(yy - ybar, yy + ybar,alpha=0.1)
-plt.savefig(os.path.join(results_dir,'MW-diff-subsets-line-measurement.pdf'), bbox_inches='tight')
-plt.close()
-
-
-
-
-# random subset of spaxels, excluding MW stars, diff subsets of diff sizes
-
-sizes=np.linspace(100,5000,10)
-sizes = [ int(x) for x in sizes ]
-
-#####
-#if os.path.exists("DATA/"+SN_name+"/weighted_EWs.npy"):
-#    weighted_EWs = np.load("DATA/"+SN_name+"/weighted_EWs.npy")
-#    weighted_EW_errs = np.load("DATA/"+SN_name+"/weighted_EW_errs.npy")
-#else:
-    
-    
-
-
-weighted_EWs=[]
-weighted_EW_errs=[]
-for size in sizes:
-    print("\nsize ",size)
-    EWs=[]
-    EW_errs=[]
-    SNRs=[]
-    for i in range(0,50):
-        subset_cube, coords = random_spaxel_subset(masked_cube, mask, n_spaxels=size)
-        spec = np.nansum(subset_cube, axis=1)
-        out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=400,plots=False, kernel_width_A=130,text=False,save=False)
-        EWs.append(out[0][0])
-        EW_errs.append(out[1][0])
-            
-
-
-    yy,ybar=weighted_average(EWs,EW_errs)
-    weighted_EWs.append(yy)
-    weighted_EW_errs.append(ybar)
-
-    np.save(os.path.join(results_dir, 'weighted_EWs.npy'), weighted_EWs)
-    np.save(os.path.join(results_dir, 'weighted_EW_errs.npy'), weighted_EW_errs)
-
-#
-
-plt.errorbar(sizes, weighted_EWs, yerr=weighted_EW_errs, fmt='o', c='Blue', capsize=5,zorder=1,label="EW subsets of pixels")
-plt.axhline(y=EW_all,label="EW using all pixels")
-plt.axhspan(EW_all - ERR_all, EW_all + ERR_all,alpha=0.1)
-plt.xlabel("Sizes S",fontsize=15)
-plt.ylabel("Weighted EW from 50 random subsets of size S",fontsize=10)
-plt.legend()
-plt.savefig(os.path.join(results_dir, 'MW-inspecting-subset-sizes.pdf'), bbox_inches='tight')
-plt.close()"""
-#####
-
-
+#quit()
 
 
 ### Kron's ellipse ###
@@ -528,7 +534,7 @@ masked_err_cube = np.where(mask, errcube, np.nan)
 
 spectrum = np.nansum(masked_cube, axis=(1, 2))
 #spectrum_err = np.sqrt(np.nansum(masked_err_cube**2))
-out=EW_voronoi_bins(np.array([spectrum]),wave,wavelength,v=400,plots=False,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
+out=EW_voronoi_bins(np.array([spectrum]),wave,wavelength,kernel_width_A=best_kernel,v=best_window,nsigma=nsigma,plots=False,save=os.path.join(results_dir,'Kron-ellipse-spectrum.pdf'))
 EW_ellipse,ERR_ellipse=out[0][0],out[1][0]
 
 
@@ -538,12 +544,12 @@ continuum_bound_w_max=new_wave[-1]
 print(type(continuum_bound_w_min), continuum_bound_w_min)
 print(type(continuum_bound_w_max), continuum_bound_w_max)
 
-#best_KS = best_continuum(wave, spectrum, wavelength,400,continuum_bound_w_min,continuum_bound_w_max,plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
+if element=="Sodium":
+    best_kernel = best_continuum(wave, spectrum,wavelength*(1+z), vel=600, kernel_widths_A=np.arange(20, 200, 10),plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
 
-best_kernel = best_continuum(wave, spectrum,wavelength*(1+z), vel=600, kernel_widths_A=np.arange(20, 200, 10),plots=True,save=os.path.join(results_dir,'Best-continuum.pdf'))
+    # inspect best window
+    best_window = best_integration_window(wave, spectrum, wavelength=wavelength,best_kernel=best_kernel,plots=True,save=os.path.join(results_dir,'Best-window.pdf'))
 
-# inspect best window
-best_window = best_integration_window(wave, spectrum, wavelength=wavelength,best_kernel=best_kernel,plots=True,save=os.path.join(results_dir,'Best-window.pdf'))
 
 ## Isophotes
 if isophotes==True:
@@ -650,7 +656,7 @@ if isophotes==True:
         ax.plot(x, y, color='white')
 
 
-    plt.savefig(os.path.join(data_dir_sn,'isophotes.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(data_dir_sn_element,'isophotes.pdf'), bbox_inches='tight')
 
     plt.close()"""
 
@@ -686,7 +692,7 @@ if isophotes==True:
             k+=1
             if k==1:
                 print("OUTPUTTING SPEC OF SMALLEST SMA")
-                if args.save_temp:
+                if save_temp==True:
                     np.save(os.path.join(results_dir,'temp_window_cont.npy'), np.column_stack((wave, spec)))
 
             out=EW_voronoi_bins(np.array([spec]),wave,wavelength,v=best_window,plots=False, kernel_width_A=best_kernel,text=False,save=os.path.join(results_dir,'isophotes-spec-sum',str(int(sma))+'.pdf'))
@@ -819,7 +825,7 @@ plt.close()
 
 import voronoi2
 
-centroids_vor, EWs_vor, EW_errs_vor, spectra_and_bins = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,wavelength,mw_mask,best_window, kernel_width_A=best_kernel, results_dir=data_dir_sn,save_temp=args.save_temp)
+centroids_vor, EWs_vor, EW_errs_vor, spectra_and_bins = voronoi2.binning(cube,new_wave,region_chopped_Na,errcube,wave,wavelength,mw_mask,best_window, N_bins=N_bins, kernel_width_A=best_kernel, results_dir=data_dir_sn_element,save_temp=save_temp)
 
 """plt.scatter(centroids_vor, EWs_vor, c=np.divide(EWs_vor,EW_errs_vor),s=50, edgecolors='black', alpha=1,zorder=2)
 
@@ -828,7 +834,7 @@ if isophotes==True:
     #plt.axhline(y=final_EW_median_isophotes,label="EW from isophote (median)")
     #plt.fill_between(x=centroids_vor,y1= final_EW_median_isophotes - final_EW_median_isophotes_err,y2= final_EW_median_isophotes + final_EW_median_isophotes_err,color='red',alpha=0.2)
     #plt.fill_between(x=centroids_vor,y1= final_EW_sum_isophotes - final_EW_sum_isophotes_err, y2= final_EW_sum_isophotes + final_EW_sum_isophotes_err,color='red',alpha=0.2)
-plt.savefig(os.path.join(data_dir_sn,'All-EW-values.pdf'), bbox_inches='tight')
+plt.savefig(os.path.join(data_dir_sn_element,'All-EW-values.pdf'), bbox_inches='tight')
 plt.close()"""
 
 
@@ -1131,7 +1137,7 @@ plt.text(0.98, 0.10, f"Corrected:  Weighted average = {weighted_avg_ew:.2f} ± {
 plt.xlabel("EW (Å)", fontsize=13)
 plt.ylabel("N bins", fontsize=13)
 plt.tight_layout()
-plt.savefig(os.path.join(data_dir_sn,"EW_fits_histogram.pdf"), bbox_inches='tight')
+plt.savefig(os.path.join(data_dir_sn_element,"EW_fits_histogram.pdf"), bbox_inches='tight')
 
 ## PLOTTING FINAL PLOTS: EW vs distance to the center and EW vs BIC
 
@@ -1171,7 +1177,7 @@ ax_bic.set_title("Corrected EW versus BIC")
 ax_bic.legend(loc="upper right", fontsize=13)
 fig.suptitle(f"{SN_name}: Fits EW measurements", fontsize=16)
 fig.tight_layout(rect=[0, 0, 1, 0.96])
-fig.savefig(os.path.join(data_dir_sn, "EW_fits_clipped.pdf"), bbox_inches="tight")
+fig.savefig(os.path.join(data_dir_sn_element, "EW_fits_clipped.pdf"), bbox_inches="tight")
 plt.close(fig)
 
 
