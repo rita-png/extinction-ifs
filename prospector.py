@@ -216,6 +216,7 @@ model_params = TemplateLibrary["parametric_sfh"]# ['continuity_sfh']
 
 # priors for optimize=true # fixed
     model_params["dust_type"]  = {'N': 1, 'isfree': False, 'init': 4}
+
 model_params["zred"]["init"] = z
 model_params["zred"]["isfree"] = False
 #model_params['sigma_smooth'] = {'N': 1, 'isfree': False, 'init': 270.0, 'units': 'km/s'}

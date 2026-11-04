@@ -140,7 +140,7 @@ def run_prospector_spaxel(spectrum,unc,wave,outdir,z):
     model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-3.0, maxi=4)}
 """
 
-    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e4, 'prior': priors.LogUniform(mini=1e2, maxi=1e9)}
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': 4e8, 'prior': priors.LogUniform(mini=1e4, maxi=1e12)}
     model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': -0.5, 'prior': priors.TopHat(mini=-2.0, maxi=0.19)}
     model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': 1.44,  'prior': priors.TopHat(mini=0.0, maxi=6.0)}
     model_params["tage"]    = {'N': 1, 'isfree': True, 'init': 0.19,  'prior': priors.TopHat(mini=0.001, maxi=13.8)}
@@ -256,7 +256,7 @@ def run_prospector_spaxel(spectrum,unc,wave,outdir,z):
         model_params["dust_index"] = {'N': 1, 'isfree': True, 'init': -0.72, 'prior': priors.TopHat(mini=-2.2, maxi=0.4)}#bounds para a law
     """
 
-    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': theta_best[0], 'prior': priors.LogUniform(mini=1e2, maxi=1e9)}
+    model_params["mass"]    = {'N': 1, 'isfree': True, 'init': theta_best[0], 'prior': priors.LogUniform(mini=1e4, maxi=1e12)}
     model_params["logzsol"] = {'N': 1, 'isfree': True, 'init': theta_best[1], 'prior': priors.TopHat(mini=-2, maxi=1.5)}
     model_params["dust2"]   = {'N': 1, 'isfree': True, 'init': theta_best[2],  'prior': priors.TopHat(mini=0.0, maxi=6)}
     model_params["tage"]    = {'N': 1, 'isfree': True, 'init': theta_best[3],  'prior': priors.TopHat(mini=0.001, maxi=13.8)}

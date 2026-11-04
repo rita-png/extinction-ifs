@@ -1969,13 +1969,12 @@ def bootstrap_error_on_sum(flux, n_boot=1000, seed=None):
     return np.nanstd(boot_sums, axis=0, ddof=1)
 
 
-"""def fit_continuum(x, y, lo, hi, width_A=25, margin=0, nsigma=1.5, n_iter=3):
+def fit_continuum(x, y, lo, hi, width_A=25, margin=0, nsigma=3, n_iter=3):
+    
     dx = np.median(np.diff(x))
     k = cosine_kernel(2 * int(round(width_A / dx / 2)) + 1)
     good = (x < lo - margin) | (x > hi + margin)        # everything outside the line window
     keep_window = good.copy()
-
-    
 
     for _ in range(n_iter):
         yfill = np.interp(x, x[good], y[good])           # bridge masked pixels
@@ -1985,11 +1984,11 @@ def bootstrap_error_on_sum(flux, n_boot=1000, seed=None):
         #good = keep_window & (np.abs(r) < nsigma * sigma)
         good = keep_window & (np.abs(r) < nsigma * 1.4826 * np.median(np.abs(r[good])))
 
-    return cont, good"""
+    return cont, good
 
 
-# new continuum function, inspired by 
-def fit_continuum(x, y, lo, hi, width_A=25, margin=0, low=30, high=75, fac=1.5, n_iter=3):
+# similar to funcction just above but with quartiles again 
+"""def fit_continuum(x, y, lo, hi, width_A=25, margin=0, low=30, high=75, fac=1.5, n_iter=3):
     dx = np.median(np.diff(x))
     k = cosine_kernel(2 * int(round(width_A / dx / 2)) + 1)
     good = (x < lo - margin) | (x > hi + margin)
@@ -2003,11 +2002,11 @@ def fit_continuum(x, y, lo, hi, width_A=25, margin=0, low=30, high=75, fac=1.5, 
         iqr = q3 - q1
         good = keep_window & (r > q1 - fac*iqr) & (r < q3 + fac*iqr)
 
-    return cont, good
+    return cont, good"""
 
 
 #kernel_widt=96.5
-def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,nsigma=1.5,plots=True,kernel_width_A=130,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
+def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v=600,n_sigma=3,plots=True,kernel_width_A=130,titles=[],save="", text=True):#spectra_per_bin, wave, na_rest,v=600,plots=True,N=5):
     EW_array=[]
     EW_err_array=[]
 
@@ -2029,17 +2028,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
             EW_array.append(np.nan); EW_err_array.append(np.nan)
             continue
 
-        # continuum
-        """kernel_size=KS
-        kernel = cosine_kernel(kernel_size)
-        x_cont,y_cont=filterout_peaks(x,y,low=30, high=65,mode="both")#this used to be 30 and 70 respectively, but i found 20 and 65 is better
-        dx = np.median(np.diff(x_chopped))
-        kernel = cosine_kernel(int(round(kernel_width_A / dx)))   # kernel covering width_A Angstrom
-        cont = convolve1d(y_cont, kernel, mode='nearest')
-        interp=interp1d(x_cont, cont, kind='cubic')"""
-
         #new oct 2026
-        cont_all, good = fit_continuum(x_all, y_all, bound1, bound2)#, kernel_width_A, nsigma=nsigma)
+        cont_all, good = fit_continuum(x_all, y_all, bound1, bound2,nsigma=n_sigma)#, kernel_width_A, nsigma=nsigma)
         interp = interp1d(x_all, cont_all, kind='cubic')
         x_cont, y_cont = x_all[good], y_all[good]
         
@@ -2071,14 +2061,8 @@ def EW_voronoi_bins(spectra_per_bin, wave, wavelength,spectra_err_per_bin=None,v
 
 
         # estimating continuum error
-        """cont1 = convolve1d(y_cont, cosine_kernel(int(round(kernel_width_A / dx)*1.25)), mode='nearest')
-        auxcont1=interp1d(x_cont, cont1, kind='cubic')
-
-        cont2 = convolve1d(y_cont, cosine_kernel(int(round(kernel_width_A / dx)*0.75)), mode='nearest')
-        auxcont2=interp1d(x_cont, cont2, kind='cubic')"""
-
-        cont1, _ = fit_continuum(x_all, y_all, bound1, bound2)#, kernel_width_A*1.25, nsigma=nsigma)
-        cont2, _ = fit_continuum(x_all, y_all, bound1, bound2)#, kernel_width_A*0.75, nsigma=nsigma)
+        cont1, _ = fit_continuum(x_all, y_all, bound1, bound2, kernel_width_A*1.25, nsigma=n_sigma)
+        cont2, _ = fit_continuum(x_all, y_all, bound1, bound2, kernel_width_A*0.75, nsigma=n_sigma)
         auxcont1 = interp1d(x_all, cont1, kind='cubic')
         auxcont2 = interp1d(x_all, cont2, kind='cubic')
 
