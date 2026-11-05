@@ -1969,11 +1969,11 @@ def bootstrap_error_on_sum(flux, n_boot=1000, seed=None):
     return np.nanstd(boot_sums, axis=0, ddof=1)
 
 
-def fit_continuum(x, y, lo, hi, width_A=25, margin=0, nsigma=3, n_iter=3):
+def fit_continuum(x, y, lo, hi, width_A=25, nsigma=3, n_iter=3):
     
     dx = np.median(np.diff(x))
     k = cosine_kernel(2 * int(round(width_A / dx / 2)) + 1)
-    good = (x < lo - margin) | (x > hi + margin)        # everything outside the line window
+    good = (x < lo +2) | (x > hi -2)        # everything outside the line window
     keep_window = good.copy()
 
     for _ in range(n_iter):
@@ -1983,6 +1983,9 @@ def fit_continuum(x, y, lo, hi, width_A=25, margin=0, nsigma=3, n_iter=3):
         #sigma = max(1.4826 * np.median(np.abs(r[good])), noise)
         #good = keep_window & (np.abs(r) < nsigma * sigma)
         good = keep_window & (np.abs(r) < nsigma * 1.4826 * np.median(np.abs(r[good])))
+
+    yfill = np.interp(x, x[good], y[good])
+    cont = convolve1d(yfill, k, mode='nearest')
 
     return cont, good
 
